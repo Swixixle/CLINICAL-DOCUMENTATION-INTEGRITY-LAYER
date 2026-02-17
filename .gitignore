@@ -38,3 +38,7 @@ venv.bak/
 *.swp
 *.swo
 *~
+
+# Database files
+*.db
+*.db-journal
