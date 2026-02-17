@@ -74,8 +74,15 @@ def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
     """
     Sign a message object using the dev private key.
     
+    The canonical message contract is locked to exactly 4 fields:
+    - transaction_id
+    - gateway_timestamp_utc
+    - final_hash
+    - policy_version_hash
+    
     Args:
         message_obj: Dictionary to sign (will be canonicalized)
+                     Must contain exactly the 4 canonical fields above
         
     Returns:
         Dictionary containing:
@@ -85,6 +92,16 @@ def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
             - signature_b64: Base64-encoded signature
             - signed_at_utc: ISO 8601 timestamp
     """
+    # Validate that message contains exactly the canonical fields
+    canonical_fields = {"transaction_id", "gateway_timestamp_utc", "final_hash", "policy_version_hash"}
+    message_fields = set(message_obj.keys())
+    
+    if message_fields != canonical_fields:
+        raise ValueError(
+            f"Message must contain exactly these fields: {canonical_fields}. "
+            f"Got: {message_fields}"
+        )
+    
     # Canonicalize the message
     canonical_bytes = json_c14n_v1(message_obj)
     

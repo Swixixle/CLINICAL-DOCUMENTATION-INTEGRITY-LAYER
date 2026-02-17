@@ -19,10 +19,25 @@ def test_halo_build_from_sample_packet():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     # Verify structure
     assert halo["halo_version"] == "v1"
@@ -50,10 +65,25 @@ def test_halo_verification_valid():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     result = verify_halo_chain(halo)
     
     assert result["valid"] is True
@@ -67,11 +97,43 @@ def test_halo_determinism():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo1 = build_halo_chain(packet_inputs)
-    halo2 = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo1 = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
+    halo2 = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     assert halo1["final_hash"] == halo2["final_hash"]
     assert halo1["block_hashes"] == halo2["block_hashes"]
@@ -84,10 +146,25 @@ def test_halo_tampering_block_content():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     # Tamper with block 2 (intent)
     halo["blocks"][1]["feature_tag"] = "TAMPERED"
@@ -109,10 +186,25 @@ def test_halo_tampering_hash():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     # Tamper with a hash
     original_hash = halo["block_hashes"][2]
@@ -136,10 +228,25 @@ def test_halo_tampering_prev_hash():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     # Tamper with prev_hash in block 3
     halo["blocks"][2]["prev_hash"] = "sha256:fake"
@@ -157,10 +264,25 @@ def test_halo_chain_linkage():
     with open(vectors_path, 'r', encoding='utf-8') as f:
         full_packet = json.load(f)
     
-    # Extract the packet_inputs from the complete packet
-    packet_inputs = full_packet.get('packet_inputs', full_packet)
-    
-    halo = build_halo_chain(packet_inputs)
+    # Extract fields from the flat packet structure
+    halo = build_halo_chain(
+        transaction_id=full_packet["transaction_id"],
+        gateway_timestamp_utc=full_packet["gateway_timestamp_utc"],
+        environment=full_packet["environment"],
+        client_id=full_packet["client_id"],
+        intent_manifest=full_packet["intent_manifest"],
+        feature_tag=full_packet["feature_tag"],
+        user_ref=full_packet["user_ref"],
+        prompt_hash=full_packet["prompt_hash"],
+        rag_hash=full_packet["rag_hash"],
+        multimodal_hash=full_packet["multimodal_hash"],
+        policy_version_hash=full_packet["policy_receipt"]["policy_version_hash"],
+        policy_change_ref=full_packet["policy_receipt"]["policy_change_ref"],
+        rules_applied=full_packet["policy_receipt"]["rules_applied"],
+        model_fingerprint=full_packet["model_fingerprint"],
+        param_snapshot=full_packet["param_snapshot"],
+        execution=full_packet["execution"]
+    )
     
     # Verify linkage: each block's prev_hash should match previous block's hash
     for i in range(1, 5):
@@ -169,22 +291,7 @@ def test_halo_chain_linkage():
 
 def test_halo_denied_outcome():
     """Test HALO chain for denied transaction."""
-    packet_inputs = {
-        "transaction_id": "tx-denied-001",
-        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
-        "environment": "production",
-        "client_id": "client-alpha-01",
-        "intent_manifest": "text-generation",
-        "feature_tag": "customer-support",
-        "user_ref": "user-12345",
-        "prompt_hash": "sha256:abc123",
-        "rag_hash": None,
-        "multimodal_hash": None,
-        "policy_version_hash": "sha256:policy123",
-        "policy_change_ref": "change-001",
-        "rules_applied": ["model-not-approved"],
-        "model_fingerprint": "gpt-4-turbo",
-        "param_snapshot": {"temperature": 0.7},
+    execution = {
         "outcome": "denied",
         "output_hash": None,
         "token_usage": None,
@@ -192,7 +299,24 @@ def test_halo_denied_outcome():
         "denial_reason": "Model not in approved list"
     }
     
-    halo = build_halo_chain(packet_inputs)
+    halo = build_halo_chain(
+        transaction_id="tx-denied-001",
+        gateway_timestamp_utc="2024-01-15T10:30:00.000Z",
+        environment="production",
+        client_id="client-alpha-01",
+        intent_manifest="text-generation",
+        feature_tag="customer-support",
+        user_ref="user-12345",
+        prompt_hash="sha256:abc123",
+        rag_hash=None,
+        multimodal_hash=None,
+        policy_version_hash="sha256:policy123",
+        policy_change_ref="change-001",
+        rules_applied=["model-not-approved"],
+        model_fingerprint="gpt-4-turbo",
+        param_snapshot={"temperature": 0.7},
+        execution=execution
+    )
     
     assert halo["blocks"][4]["outcome"] == "denied"
     assert halo["blocks"][4]["denial_reason"] == "Model not in approved list"

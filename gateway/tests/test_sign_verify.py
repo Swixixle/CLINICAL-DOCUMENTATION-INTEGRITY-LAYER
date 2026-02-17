@@ -16,8 +16,9 @@ def test_sign_and_verify():
     """Test that a signed message can be verified."""
     message = {
         "transaction_id": "tx-test-001",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
         "final_hash": "sha256:abc123",
-        "timestamp": "2024-01-15T10:30:00.000Z"
+        "policy_version_hash": "sha256:policy123"
     }
     
     # Sign the message
@@ -44,7 +45,9 @@ def test_tampering_detected():
     """Test that tampering with message breaks verification."""
     message = {
         "transaction_id": "tx-test-002",
-        "final_hash": "sha256:def456"
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:def456",
+        "policy_version_hash": "sha256:policy456"
     }
     
     # Sign the message
@@ -69,7 +72,9 @@ def test_signature_tampering_detected():
     """Test that tampering with signature is detected."""
     message = {
         "transaction_id": "tx-test-003",
-        "data": "important"
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:abc789",
+        "policy_version_hash": "sha256:policy789"
     }
     
     # Sign the message
@@ -98,8 +103,19 @@ def test_signature_tampering_detected():
 def test_deterministic_canonicalization_in_signing():
     """Test that signing uses deterministic canonicalization."""
     # Two dicts with different key order but same content
-    message1 = {"z": 1, "a": 2, "m": 3}
-    message2 = {"a": 2, "m": 3, "z": 1}
+    # Using the canonical 4-field message format
+    message1 = {
+        "transaction_id": "tx-test-001",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:abc123",
+        "policy_version_hash": "sha256:policy123"
+    }
+    message2 = {
+        "policy_version_hash": "sha256:policy123",
+        "final_hash": "sha256:abc123",
+        "transaction_id": "tx-test-001",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z"
+    }
     
     bundle1 = sign_message(message1)
     bundle2 = sign_message(message2)
@@ -139,4 +155,48 @@ def test_verify_invalid_bundle():
     assert verify_signature({"signature_b64": "abc"}, jwk) is False
     
     # Missing signature
-    assert verify_signature({"message": {"test": 1}}, jwk) is False
+    assert verify_signature({"message": {
+        "transaction_id": "test",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:test",
+        "policy_version_hash": "sha256:policy"
+    }}, jwk) is False
+
+
+def test_canonical_message_contract_enforced():
+    """Test that only the 4 canonical fields are accepted in signing."""
+    # Valid message with exactly 4 fields
+    valid_message = {
+        "transaction_id": "tx-test-001",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:abc123",
+        "policy_version_hash": "sha256:policy123"
+    }
+    
+    # Should succeed
+    bundle = sign_message(valid_message)
+    assert bundle["message"] == valid_message
+    
+    # Message with extra field
+    invalid_message_extra = {
+        "transaction_id": "tx-test-002",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "final_hash": "sha256:abc123",
+        "policy_version_hash": "sha256:policy123",
+        "extra_field": "should_not_be_here"
+    }
+    
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Message must contain exactly these fields"):
+        sign_message(invalid_message_extra)
+    
+    # Message with missing field
+    invalid_message_missing = {
+        "transaction_id": "tx-test-003",
+        "final_hash": "sha256:abc123",
+        "policy_version_hash": "sha256:policy123"
+    }
+    
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Message must contain exactly these fields"):
+        sign_message(invalid_message_missing)
