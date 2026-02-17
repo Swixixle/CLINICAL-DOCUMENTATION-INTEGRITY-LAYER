@@ -1,9 +1,41 @@
 {
   "transaction_id": "tx-2024-001",
-  "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
-  "environment": "production",
   "client_id": "client-alpha-01",
-  "halo": {
+  "environment": "production",
+  "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+  "intent_manifest": "text-generation",
+  "feature_tag": "customer-support",
+  "user_ref": "user-12345",
+  "model_fingerprint": "gpt-4-0613",
+  "param_snapshot": {
+    "temperature": 0.7,
+    "max_tokens": 500,
+    "top_p": 1.0
+  },
+  "prompt_hash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+  "rag_hash": null,
+  "multimodal_hash": null,
+  "policy_receipt": {
+    "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "policy_change_ref": "change-001",
+    "rules_applied": [
+      "require-approved-models",
+      "token-limit-10000",
+      "no-pii-in-prompt"
+    ]
+  },
+  "execution": {
+    "outcome": "approved",
+    "output_hash": "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+    "token_usage": {
+      "prompt_tokens": 150,
+      "completion_tokens": 200,
+      "total_tokens": 350
+    },
+    "latency_ms": 1250,
+    "denial_reason": null
+  },
+  "halo_chain": {
     "halo_version": "v1",
     "blocks": [
       {
@@ -62,51 +94,21 @@
     ],
     "final_hash": "sha256:febd6cc8bc30dc39e382b3728fec49a4e1cb4966333492694e97cc5bc7aa2b46"
   },
-  "signature": {
+  "verification": {
     "alg": "ECDSA_SHA_256",
     "key_id": "dev-key-01",
     "message": {
       "transaction_id": "tx-2024-001",
       "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
       "final_hash": "sha256:febd6cc8bc30dc39e382b3728fec49a4e1cb4966333492694e97cc5bc7aa2b46",
-      "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-      "client_id": "client-alpha-01"
+      "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
     },
-    "signature_b64": "MEUCIQCbR80SnIPblELZh0ZwUviyQ2zk0LiPeZm3z4FOuBzX9gIgfH2r6SZR/60eCHxo2/pK5JHrDiJOARj3j0iJhv6qacc=",
+    "signature_b64": "",
     "signed_at_utc": "2026-02-17T15:18:02.228768Z"
   },
-  "packet_inputs": {
-    "transaction_id": "tx-2024-001",
-    "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
-    "environment": "production",
-    "client_id": "client-alpha-01",
-    "intent_manifest": "text-generation",
-    "feature_tag": "customer-support",
-    "user_ref": "user-12345",
-    "prompt_hash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "rag_hash": null,
-    "multimodal_hash": null,
-    "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-    "policy_change_ref": "change-001",
-    "rules_applied": [
-      "require-approved-models",
-      "token-limit-10000",
-      "no-pii-in-prompt"
-    ],
-    "model_fingerprint": "gpt-4-0613",
-    "param_snapshot": {
-      "temperature": 0.7,
-      "max_tokens": 500,
-      "top_p": 1.0
-    },
-    "outcome": "approved",
-    "output_hash": "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
-    "token_usage": {
-      "prompt_tokens": 150,
-      "completion_tokens": 200,
-      "total_tokens": 350
-    },
-    "latency_ms": 1250,
-    "denial_reason": null
+  "protocol_metadata": {
+    "halo_version": "v1",
+    "c14n_version": "json_c14n_v1",
+    "signing_alg": "ECDSA_SHA_256"
   }
 }

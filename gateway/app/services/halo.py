@@ -19,33 +19,55 @@ from typing import Any, Dict, List, Optional
 
 from gateway.app.services.hashing import hash_c14n
 
+# Protocol version constants
+HALO_VERSION = "v1"
+C14N_VERSION = "json_c14n_v1"
+SIGNING_ALG = "ECDSA_SHA_256"
 
-def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
+
+def build_halo_chain(
+    transaction_id: str,
+    gateway_timestamp_utc: str,
+    environment: str,
+    client_id: str,
+    intent_manifest: str,
+    feature_tag: str,
+    user_ref: str,
+    prompt_hash: str,
+    rag_hash: Optional[str],
+    multimodal_hash: Optional[str],
+    policy_version_hash: str,
+    policy_change_ref: str,
+    rules_applied: List[str],
+    model_fingerprint: str,
+    param_snapshot: Dict[str, Any],
+    execution: Dict[str, Any]
+) -> Dict[str, Any]:
     """
-    Build a HALO v1 chain from transaction inputs.
+    Build a HALO v1 chain from explicit transaction parameters.
     
     Args:
-        packet_inputs: Dictionary containing all required fields for the 5 blocks:
-            - transaction_id
-            - gateway_timestamp_utc
-            - environment
-            - client_id
-            - intent_manifest
-            - feature_tag
-            - user_ref
-            - prompt_hash
-            - rag_hash (optional)
-            - multimodal_hash (optional)
-            - policy_version_hash
-            - policy_change_ref
-            - rules_applied
-            - model_fingerprint
-            - param_snapshot
-            - outcome ("approved" or "denied")
-            - output_hash (optional, null if denied)
-            - token_usage (optional)
-            - latency_ms (optional)
-            - denial_reason (optional)
+        transaction_id: Unique transaction identifier
+        gateway_timestamp_utc: ISO 8601 UTC timestamp
+        environment: Environment name (production, staging, dev)
+        client_id: Client identifier
+        intent_manifest: Intent type (e.g., "text-generation")
+        feature_tag: Feature tag (e.g., "customer-support")
+        user_ref: User reference
+        prompt_hash: SHA-256 hash of prompt content
+        rag_hash: SHA-256 hash of RAG content (optional)
+        multimodal_hash: SHA-256 hash of multimodal content (optional)
+        policy_version_hash: SHA-256 hash of policy version
+        policy_change_ref: Policy change reference ID
+        rules_applied: List of policy rules that were applied
+        model_fingerprint: Model identifier/fingerprint
+        param_snapshot: Dictionary of model parameters
+        execution: Dictionary with execution details:
+            - outcome: "approved" or "denied"
+            - output_hash: SHA-256 hash of output (optional)
+            - token_usage: Token usage stats (optional)
+            - latency_ms: Latency in milliseconds (optional)
+            - denial_reason: Reason for denial (optional)
     
     Returns:
         Dictionary with:
@@ -59,10 +81,10 @@ def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
     
     # Block 1: Genesis
     block1 = {
-        "transaction_id": packet_inputs["transaction_id"],
-        "gateway_timestamp_utc": packet_inputs["gateway_timestamp_utc"],
-        "environment": packet_inputs["environment"],
-        "client_id": packet_inputs["client_id"]
+        "transaction_id": transaction_id,
+        "gateway_timestamp_utc": gateway_timestamp_utc,
+        "environment": environment,
+        "client_id": client_id
     }
     blocks.append(block1)
     h1 = hash_c14n(block1)
@@ -71,9 +93,9 @@ def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
     # Block 2: Intent
     block2 = {
         "prev_hash": h1,
-        "intent_manifest": packet_inputs["intent_manifest"],
-        "feature_tag": packet_inputs["feature_tag"],
-        "user_ref": packet_inputs["user_ref"]
+        "intent_manifest": intent_manifest,
+        "feature_tag": feature_tag,
+        "user_ref": user_ref
     }
     blocks.append(block2)
     h2 = hash_c14n(block2)
@@ -82,9 +104,9 @@ def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
     # Block 3: Inputs
     block3 = {
         "prev_hash": h2,
-        "prompt_hash": packet_inputs["prompt_hash"],
-        "rag_hash": packet_inputs.get("rag_hash"),
-        "multimodal_hash": packet_inputs.get("multimodal_hash")
+        "prompt_hash": prompt_hash,
+        "rag_hash": rag_hash,
+        "multimodal_hash": multimodal_hash
     }
     blocks.append(block3)
     h3 = hash_c14n(block3)
@@ -93,11 +115,11 @@ def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
     # Block 4: Policy + Model
     block4 = {
         "prev_hash": h3,
-        "policy_version_hash": packet_inputs["policy_version_hash"],
-        "policy_change_ref": packet_inputs["policy_change_ref"],
-        "rules_applied": packet_inputs["rules_applied"],
-        "model_fingerprint": packet_inputs["model_fingerprint"],
-        "param_snapshot": packet_inputs["param_snapshot"]
+        "policy_version_hash": policy_version_hash,
+        "policy_change_ref": policy_change_ref,
+        "rules_applied": rules_applied,
+        "model_fingerprint": model_fingerprint,
+        "param_snapshot": param_snapshot
     }
     blocks.append(block4)
     h4 = hash_c14n(block4)
@@ -106,18 +128,18 @@ def build_halo_chain(packet_inputs: Dict[str, Any]) -> Dict[str, Any]:
     # Block 5: Output
     block5 = {
         "prev_hash": h4,
-        "outcome": packet_inputs["outcome"],
-        "output_hash": packet_inputs.get("output_hash"),
-        "token_usage": packet_inputs.get("token_usage"),
-        "latency_ms": packet_inputs.get("latency_ms"),
-        "denial_reason": packet_inputs.get("denial_reason")
+        "outcome": execution["outcome"],
+        "output_hash": execution.get("output_hash"),
+        "token_usage": execution.get("token_usage"),
+        "latency_ms": execution.get("latency_ms"),
+        "denial_reason": execution.get("denial_reason")
     }
     blocks.append(block5)
     h5 = hash_c14n(block5)
     block_hashes.append(h5)
     
     return {
-        "halo_version": "v1",
+        "halo_version": HALO_VERSION,
         "blocks": blocks,
         "block_hashes": block_hashes,
         "final_hash": h5
