@@ -72,8 +72,9 @@ def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any
     # Rule 3: Network access must be False in production for billing
     if environment == "production" and feature_tag == "billing":
         rules_applied.append("network_denied")
-        # For now, we assume network_access is False (not exposed in request yet)
-        # In production, this would check request.get("network_access", False)
+        # Note: network_access parameter is not yet exposed in the request schema.
+        # For Phase 2, we assume network_access is False for billing.
+        # In production, this would check: if request.get("network_access", False): deny
     
     # Compute policy version hash (deterministic)
     policy_version_hash = sha256_hex(POLICY_VERSION.encode('utf-8'))

@@ -83,12 +83,14 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         })
     else:
         # Denied execution stub
+        denial_reasons = policy_receipt.get("denial_reasons") or []
+        denial_message = "; ".join(denial_reasons) if denial_reasons else "Policy denied"
         execution = {
             "outcome": "denied",
             "output_hash": None,
             "token_usage": None,
             "latency_ms": 0,
-            "denial_reason": f"Policy denied: {', '.join(policy_receipt.get('rules_applied', []))}"
+            "denial_reason": denial_message
         }
     
     # Step 5: Build accountability packet
