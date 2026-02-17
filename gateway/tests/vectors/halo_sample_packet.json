@@ -1,0 +1,112 @@
+{
+  "transaction_id": "tx-2024-001",
+  "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+  "environment": "production",
+  "client_id": "client-alpha-01",
+  "halo": {
+    "halo_version": "v1",
+    "blocks": [
+      {
+        "transaction_id": "tx-2024-001",
+        "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+        "environment": "production",
+        "client_id": "client-alpha-01"
+      },
+      {
+        "prev_hash": "sha256:0fa7be901ed2561ef46c540a519edbb09fff2577f1d4c738fa2083299cae62d3",
+        "intent_manifest": "text-generation",
+        "feature_tag": "customer-support",
+        "user_ref": "user-12345"
+      },
+      {
+        "prev_hash": "sha256:6d01959bea95d0eaec359a52a6c8e64dad8c4ab007d41cc2ec2d774b7feb8a6f",
+        "prompt_hash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        "rag_hash": null,
+        "multimodal_hash": null
+      },
+      {
+        "prev_hash": "sha256:3e2c5de80efa92ac55d00750dfce30278a94e9c48dbfc6bdbacb0d0d523e6e7a",
+        "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+        "policy_change_ref": "change-001",
+        "rules_applied": [
+          "require-approved-models",
+          "token-limit-10000",
+          "no-pii-in-prompt"
+        ],
+        "model_fingerprint": "gpt-4-0613",
+        "param_snapshot": {
+          "temperature": 0.7,
+          "max_tokens": 500,
+          "top_p": 1.0
+        }
+      },
+      {
+        "prev_hash": "sha256:90579f6751769863baa74d17fbc6ce1ef93b2d4567f7dae870ce187b5d7e362a",
+        "outcome": "approved",
+        "output_hash": "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+        "token_usage": {
+          "prompt_tokens": 150,
+          "completion_tokens": 200,
+          "total_tokens": 350
+        },
+        "latency_ms": 1250,
+        "denial_reason": null
+      }
+    ],
+    "block_hashes": [
+      "sha256:0fa7be901ed2561ef46c540a519edbb09fff2577f1d4c738fa2083299cae62d3",
+      "sha256:6d01959bea95d0eaec359a52a6c8e64dad8c4ab007d41cc2ec2d774b7feb8a6f",
+      "sha256:3e2c5de80efa92ac55d00750dfce30278a94e9c48dbfc6bdbacb0d0d523e6e7a",
+      "sha256:90579f6751769863baa74d17fbc6ce1ef93b2d4567f7dae870ce187b5d7e362a",
+      "sha256:febd6cc8bc30dc39e382b3728fec49a4e1cb4966333492694e97cc5bc7aa2b46"
+    ],
+    "final_hash": "sha256:febd6cc8bc30dc39e382b3728fec49a4e1cb4966333492694e97cc5bc7aa2b46"
+  },
+  "signature": {
+    "alg": "ECDSA_SHA_256",
+    "key_id": "dev-key-01",
+    "message": {
+      "transaction_id": "tx-2024-001",
+      "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+      "final_hash": "sha256:febd6cc8bc30dc39e382b3728fec49a4e1cb4966333492694e97cc5bc7aa2b46",
+      "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "client_id": "client-alpha-01"
+    },
+    "signature_b64": "MEUCIQCbR80SnIPblELZh0ZwUviyQ2zk0LiPeZm3z4FOuBzX9gIgfH2r6SZR/60eCHxo2/pK5JHrDiJOARj3j0iJhv6qacc=",
+    "signed_at_utc": "2026-02-17T15:18:02.228768Z"
+  },
+  "packet_inputs": {
+    "transaction_id": "tx-2024-001",
+    "gateway_timestamp_utc": "2024-01-15T10:30:00.000Z",
+    "environment": "production",
+    "client_id": "client-alpha-01",
+    "intent_manifest": "text-generation",
+    "feature_tag": "customer-support",
+    "user_ref": "user-12345",
+    "prompt_hash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "rag_hash": null,
+    "multimodal_hash": null,
+    "policy_version_hash": "sha256:policy9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "policy_change_ref": "change-001",
+    "rules_applied": [
+      "require-approved-models",
+      "token-limit-10000",
+      "no-pii-in-prompt"
+    ],
+    "model_fingerprint": "gpt-4-0613",
+    "param_snapshot": {
+      "temperature": 0.7,
+      "max_tokens": 500,
+      "top_p": 1.0
+    },
+    "outcome": "approved",
+    "output_hash": "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+    "token_usage": {
+      "prompt_tokens": 150,
+      "completion_tokens": 200,
+      "total_tokens": 350
+    },
+    "latency_ms": 1250,
+    "denial_reason": null
+  }
+}

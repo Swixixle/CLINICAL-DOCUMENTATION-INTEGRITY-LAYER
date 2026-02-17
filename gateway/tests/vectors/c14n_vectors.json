@@ -1,0 +1,104 @@
+[
+  {
+    "name": "empty_object",
+    "input": {},
+    "expected": "{}"
+  },
+  {
+    "name": "empty_array",
+    "input": [],
+    "expected": "[]"
+  },
+  {
+    "name": "simple_key_ordering",
+    "input": {"z": 1, "a": 2, "m": 3},
+    "expected": "{\"a\":2,\"m\":3,\"z\":1}"
+  },
+  {
+    "name": "nested_dict",
+    "input": {"outer": {"z": 1, "a": 2}, "first": 3},
+    "expected": "{\"first\":3,\"outer\":{\"a\":2,\"z\":1}}"
+  },
+  {
+    "name": "nested_array",
+    "input": {"items": [3, 1, 2]},
+    "expected": "{\"items\":[3,1,2]}"
+  },
+  {
+    "name": "unicode_string",
+    "input": {"message": "Hello 世界 🌍"},
+    "expected": "{\"message\":\"Hello 世界 🌍\"}"
+  },
+  {
+    "name": "escaped_quotes",
+    "input": {"text": "She said \"hello\""},
+    "expected": "{\"text\":\"She said \\\"hello\\\"\"}"
+  },
+  {
+    "name": "escaped_backslash",
+    "input": {"path": "C:\\Users\\test"},
+    "expected": "{\"path\":\"C:\\\\Users\\\\test\"}"
+  },
+  {
+    "name": "boolean_true",
+    "input": {"enabled": true},
+    "expected": "{\"enabled\":true}"
+  },
+  {
+    "name": "boolean_false",
+    "input": {"disabled": false},
+    "expected": "{\"disabled\":false}"
+  },
+  {
+    "name": "null_value",
+    "input": {"empty": null},
+    "expected": "{\"empty\":null}"
+  },
+  {
+    "name": "integer",
+    "input": {"count": 42},
+    "expected": "{\"count\":42}"
+  },
+  {
+    "name": "negative_integer",
+    "input": {"temp": -273},
+    "expected": "{\"temp\":-273}"
+  },
+  {
+    "name": "float",
+    "input": {"pi": 3.14159},
+    "expected": "{\"pi\":3.14159}"
+  },
+  {
+    "name": "float_scientific",
+    "input": {"small": 1.23e-10},
+    "expected": "{\"small\":1.23e-10}"
+  },
+  {
+    "name": "complex_nested",
+    "input": {
+      "transaction": "tx-123",
+      "meta": {
+        "user": "alice",
+        "timestamp": "2024-01-01T00:00:00Z"
+      },
+      "items": [
+        {"id": 1, "name": "apple"},
+        {"id": 2, "name": "banana"}
+      ],
+      "total": 99.99,
+      "approved": true
+    },
+    "expected": "{\"approved\":true,\"items\":[{\"id\":1,\"name\":\"apple\"},{\"id\":2,\"name\":\"banana\"}],\"meta\":{\"timestamp\":\"2024-01-01T00:00:00Z\",\"user\":\"alice\"},\"total\":99.99,\"transaction\":\"tx-123\"}"
+  },
+  {
+    "name": "newline_in_string",
+    "input": {"text": "line1\nline2"},
+    "expected": "{\"text\":\"line1\\nline2\"}"
+  },
+  {
+    "name": "tab_in_string",
+    "input": {"text": "col1\tcol2"},
+    "expected": "{\"text\":\"col1\\tcol2\"}"
+  }
+]

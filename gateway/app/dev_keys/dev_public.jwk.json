@@ -1,0 +1,8 @@
+{
+  "kty": "EC",
+  "crv": "P-256",
+  "x": "AClCIvI0pJn3acSsPEmHu4UXX82fNbtQk46W_pd4Dc0",
+  "y": "gSTRyJGM4Dz0iaUa4qJ5BSXHXFLCt_ZDH_UMaBCmtbQ",
+  "kid": "dev-key-01",
+  "use": "sig"
+}
