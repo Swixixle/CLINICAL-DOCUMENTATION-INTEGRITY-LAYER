@@ -88,10 +88,10 @@ def test_get_key_by_id(client):
     """Test getting a specific key."""
     response = client.get("/v1/keys/dev-key-01")
     assert response.status_code == 200
-    key = response.json()
-    assert key["key_id"] == "dev-key-01"
-    assert key["status"] == "active"
-    assert "jwk" in key
+    jwk = response.json()
+    # Should return only JWK object, not wrapped
+    assert "kty" in jwk  # JWK should have key type
+    assert "x" in jwk  # EC public key should have x coordinate
 
 
 def test_get_key_not_found(client):
@@ -104,7 +104,7 @@ def test_ai_call_approved(client):
     """Test approved AI call flow."""
     request = {
         "prompt": "What is the capital of France?",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-01",
         "feature_tag": "customer-support",
         "user_ref": "user-123",
@@ -132,7 +132,7 @@ def test_ai_call_denied_temperature(client):
     """Test denied AI call due to temperature constraint."""
     request = {
         "prompt": "Calculate total: $100",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-02",
         "feature_tag": "billing",  # billing requires temp=0.0
         "user_ref": "user-456",
@@ -152,7 +152,7 @@ def test_ai_call_denied_model(client):
     """Test denied AI call due to model not in allowlist."""
     request = {
         "prompt": "Hello world",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-03",
         "feature_tag": "general",
         "model": "gpt-5-turbo",  # Not in allowlist
@@ -243,7 +243,7 @@ def test_end_to_end_flow(client):
     # Step 1: Create transaction
     request = {
         "prompt": "End-to-end test prompt",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "e2e-client",
         "feature_tag": "testing",
         "user_ref": "e2e-user",
@@ -269,7 +269,7 @@ def test_end_to_end_flow(client):
     # Top-level fields
     assert packet["transaction_id"] == transaction_id
     assert packet["client_id"] == "e2e-client"
-    assert packet["environment"] == "production"
+    assert packet["environment"] == "prod"
     assert packet["feature_tag"] == "testing"
     assert packet["model_fingerprint"] == "gpt-4"
     
@@ -316,7 +316,7 @@ def test_billing_feature_approved_with_correct_temp(client):
     """Test that billing feature works with temperature=0.0."""
     request = {
         "prompt": "Calculate billing total",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "billing-client",
         "feature_tag": "billing",
         "model": "gpt-4",
