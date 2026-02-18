@@ -1,7 +1,7 @@
 """
-ELI Sentinel Gateway - FastAPI Application
+Clinical Documentation Integrity Layer (CDIL) - FastAPI Application
 
-This is the main entry point for the ELI Sentinel Gateway API.
+This is the main entry point for the CDIL API.
 """
 
 from fastapi import FastAPI
@@ -34,8 +34,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
-    title="ELI Sentinel Gateway",
-    description="Cryptographically Verifiable AI Governance Infrastructure",
+    title="Clinical Documentation Integrity Layer",
+    description="Cryptographically signed integrity certificates for AI-generated clinical documentation",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -51,7 +51,7 @@ app.include_router(ai.router)
 async def root():
     """Root endpoint."""
     return {
-        "service": "ELI Sentinel Gateway",
+        "service": "Clinical Documentation Integrity Layer",
         "version": "0.1.0",
         "status": "operational"
     }

@@ -1,5 +1,5 @@
 """
-Smoke tests for ELI Sentinel Gateway API.
+Smoke tests for Clinical Documentation Integrity Layer (CDIL) API.
 
 Tests the complete end-to-end flow:
 - Health check
@@ -65,7 +65,7 @@ def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "ELI Sentinel Gateway"
+    assert data["service"] == "Clinical Documentation Integrity Layer"
     assert data["status"] == "operational"
 
 
