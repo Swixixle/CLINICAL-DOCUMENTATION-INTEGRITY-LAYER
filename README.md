@@ -20,6 +20,24 @@ When questioned about AI-generated clinical documentation, you provide:
 
 ---
 
+## 📋 Security Documentation
+
+**Critical:** Before production deployment, review the comprehensive security documentation:
+
+- **[Threat Model & Trust Guarantees](./docs/THREAT_MODEL_AND_TRUST_GUARANTEES.md)** - Complete security contract, attacker model, STRIDE analysis, and vulnerability assessment
+- **[Security Audit Summary](./docs/SECURITY_AUDIT_SUMMARY.md)** - Executive summary with critical findings and remediation timeline
+- **[Security Documentation Guide](./docs/README_SECURITY.md)** - Navigation guide for security docs and automated tests
+
+**Key findings:**
+- ⚠️ **Critical Gap**: Single global key enables cross-tenant forgery (pre-production blocker)
+- ✅ PHI properly hashed, never stored in plaintext
+- ✅ Tenant isolation at DB layer works correctly
+- ✅ 11 automated security tests passing
+
+See [remediation timeline](./docs/SECURITY_AUDIT_SUMMARY.md#9-remediation-timeline) for production readiness requirements.
+
+---
+
 ## Core Workflow
 
 ### 1. Issue Certificate at Note Finalization
