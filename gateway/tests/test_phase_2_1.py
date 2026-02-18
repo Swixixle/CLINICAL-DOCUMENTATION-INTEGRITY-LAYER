@@ -182,7 +182,7 @@ def test_allowed_tools_approved(client):
     assert data["status"] == "completed"
 
 
-def test_verify_detects_halo_tampering(client):
+def test_verify_detects_packet_field_tampering(client):
     """Test that verification detects packet field tampering (strong version).
     
     This test proves the stronger claim: if you tamper with ANY packet field
@@ -252,10 +252,21 @@ def test_verify_detects_halo_tampering(client):
     # Should have a halo_chain failure with final_hash_mismatch
     halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
     assert len(halo_failures) > 0
-    assert "final_hash_mismatch" in halo_failures[0]["error"]
-    # Verify error message includes both hashes for debugging
-    assert "recomputed" in halo_failures[0]["error"]
-    assert "stored" in halo_failures[0]["error"]
+    assert halo_failures[0]["error"] == "final_hash_mismatch"
+    
+    # Verify error contains debug info with prefixes only (no full hashes)
+    assert "debug" in halo_failures[0]
+    assert "stored_prefix" in halo_failures[0]["debug"]
+    assert "recomputed_prefix" in halo_failures[0]["debug"]
+    
+    # Ensure prefixes are 16 characters (hash leakage policy)
+    assert len(halo_failures[0]["debug"]["stored_prefix"]) == 16
+    assert len(halo_failures[0]["debug"]["recomputed_prefix"]) == 16
+    
+    # Ensure NO full hashes are present in the error
+    error_str = str(halo_failures[0])
+    assert len(original_halo_final_hash) > 16  # Full hash is longer than prefix
+    assert original_halo_final_hash not in error_str  # Full hash should not appear
 
 
 def test_verify_detects_signature_tampering(client):
@@ -307,9 +318,12 @@ def test_verify_detects_signature_tampering(client):
     assert "failures" in result
     assert len(result["failures"]) > 0
     
-    # Should have a signature failure
+    # Should have a signature failure with consistent error schema
     sig_failures = [f for f in result["failures"] if f["check"] == "signature"]
     assert len(sig_failures) > 0
+    # Verify it uses "error" key, not "message" key
+    assert "error" in sig_failures[0]
+    assert sig_failures[0]["error"] == "invalid_signature"
 
 
 def test_environment_values_are_consistent(client):

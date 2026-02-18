@@ -102,14 +102,20 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     
     This is primarily used for testing tampering scenarios.
     
+    CRITICAL INVARIANTS:
+    - Stores JSON blob exactly as provided (no field recomputation)
+    - Only updates indexed columns from fields already inside the blob
+    - Never touches/rewrites packet["halo_chain"], packet["verification"], etc.
+    - Does NOT normalize or compute anything - packet is stored as-is
+    
     Args:
         transaction_id: Transaction identifier
-        packet: Updated accountability packet dictionary
+        packet: Updated accountability packet dictionary (stored without modification)
     """
-    # Serialize packet
+    # Serialize packet exactly as provided - no recomputation
     packet_json = json.dumps(packet, sort_keys=True)
     
-    # Update indexed fields if they changed
+    # Extract indexed field from packet (read-only, no modification)
     final_hash = packet["halo_chain"]["final_hash"]
     
     conn = get_connection()

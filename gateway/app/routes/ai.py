@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
-from gateway.app.models import AICallRequest
 from gateway.app.models import AICallRequest, ModelRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
@@ -65,19 +64,13 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     
     # Step 3: Evaluate policy (pre-execution)
     policy_request = {
-        "provider": request.model_request.provider,
-        "model": request.model_request.model,
-        "temperature": request.model_request.temperature,
-        "max_tokens": request.model_request.max_tokens,
         "model": model,
         "temperature": temperature,
         "feature_tag": request.feature_tag,
         "network_access": request.network_access,
         "tool_permissions": request.tool_permissions,
         "environment": request.environment,
-        "intent_manifest": request.intent_manifest,
-        "network_access": request.network_access,
-        "tool_permissions": request.tool_permissions
+        "intent_manifest": request.intent_manifest
     }
     
     policy_receipt = evaluate_request(policy_request, request.environment)
@@ -85,9 +78,6 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     # Step 4: Execute AI call or create denial stub
     if policy_receipt["decision"] == "approved":
         execution = execute({
-            "prompt": request.prompt,
-            "model": request.model_request.model,
-            "temperature": request.model_request.temperature
             "prompt": prompt_text,
             "model": model,
             "temperature": temperature
@@ -119,11 +109,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         policy_version_hash=policy_receipt["policy_version_hash"],
         policy_change_ref=policy_receipt["policy_change_ref"],
         rules_applied=policy_receipt["rules_applied"],
-        model_fingerprint=request.model_request.model,
-        param_snapshot={"temperature": request.model_request.temperature},
-        policy_decision=policy_receipt["decision"],
         model_fingerprint=model,
         param_snapshot={"temperature": temperature},
+        policy_decision=policy_receipt["decision"],
         execution=execution
     )
     
