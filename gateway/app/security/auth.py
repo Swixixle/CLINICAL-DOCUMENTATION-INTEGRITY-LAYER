@@ -15,6 +15,7 @@ Roles:
 - clinician: Can issue certificates
 - auditor: Can verify certificates and query audit logs
 - admin: Full access to all operations
+- ehr_gateway: Can verify certificates and issue commit tokens (EHR gatekeeper mode)
 """
 
 import os
@@ -148,7 +149,7 @@ async def get_current_identity(
             )
         
         # Validate role value
-        valid_roles = {"clinician", "auditor", "admin"}
+        valid_roles = {"clinician", "auditor", "admin", "ehr_gateway"}
         if role not in valid_roles:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
