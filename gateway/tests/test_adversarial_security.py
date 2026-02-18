@@ -208,7 +208,7 @@ class TestReplayProtection:
         is_nonce_new = check_and_record_nonce(tenant_id, used_nonce)
         
         # Verify that the nonce is rejected (replay attack detected)
-        assert is_nonce_new == False, "Reused nonce should be rejected"
+        assert not is_nonce_new, "Reused nonce should be rejected"
     
     def test_nonce_isolation_between_tenants(self):
         """
@@ -226,16 +226,16 @@ class TestReplayProtection:
         # Record nonce for tenant A
         tenant_a = "hospital-a-replay"
         is_new_a = check_and_record_nonce(tenant_a, shared_nonce)
-        assert is_new_a == True, "First use of nonce by tenant A should succeed"
+        assert is_new_a, "First use of nonce by tenant A should succeed"
         
         # Same nonce should be allowed for tenant B (different tenant)
         tenant_b = "hospital-b-replay"
         is_new_b = check_and_record_nonce(tenant_b, shared_nonce)
-        assert is_new_b == True, "Same nonce should be allowed for different tenant"
+        assert is_new_b, "Same nonce should be allowed for different tenant"
         
         # But reusing for tenant A should fail
         is_new_a_again = check_and_record_nonce(tenant_a, shared_nonce)
-        assert is_new_a_again == False, "Reused nonce for same tenant should be rejected"
+        assert not is_new_a_again, "Reused nonce for same tenant should be rejected"
 
 
 class TestSignatureIntegrity:
