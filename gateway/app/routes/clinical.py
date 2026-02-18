@@ -4,9 +4,9 @@ Clinical documentation endpoints for CDIL.
 Handles certificate issuance and verification for AI-generated clinical notes.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import Response
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
 from gateway.app.models.clinical import (
@@ -140,26 +140,59 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     This endpoint is called when a clinical note is finalized and ready for
     commitment to the EHR. It:
     
-    1. Hashes note content and PHI fields
-    2. Retrieves tenant's chain head
-    3. Computes new chain hash
-    4. Signs the certificate
-    5. Stores the certificate
-    6. Returns certificate and verification URL
+    1. Validates note_text for PHI patterns (rejects obvious PHI)
+    2. Hashes note content and PHI fields (never stores plaintext)
+    3. Retrieves tenant's chain head
+    4. Computes new chain hash
+    5. Signs the certificate
+    6. Stores the certificate
+    7. Returns certificate and verification URL
     
     Args:
         request: Clinical documentation details
         
     Returns:
         Certificate issuance response with certificate_id and full certificate
+        
+    Raises:
+        HTTPException: 400 if PHI patterns detected in note_text
     """
+    import re
+    
+    # Step 0: PHI Detection Guardrails - reject obvious PHI patterns
+    # This protects against accidental PHI exposure in note_text
+    note_text = request.note_text
+    
+    phi_patterns = {
+        "ssn": r'\b\d{3}-\d{2}-\d{4}\b',  # SSN: 123-45-6789
+        "phone": r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # Phone: 555-123-4567
+        "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
+    }
+    
+    detected_phi = []
+    for phi_type, pattern in phi_patterns.items():
+        if re.search(pattern, note_text):
+            detected_phi.append(phi_type)
+    
+    if detected_phi:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "phi_detected_in_note_text",
+                "message": "Note text contains potential PHI patterns that should not be included",
+                "detected_patterns": detected_phi,
+                "guidance": "Remove SSN, phone numbers, and email addresses from note_text before submission"
+            }
+        )
+    
     # Step 1: Generate certificate ID and timestamp
     certificate_id = generate_uuid7()
     timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     finalized_at = timestamp  # Server sets finalization time, never client
     
     # Step 2: Hash PHI fields (note_text, patient_reference, reviewer_id)
-    note_hash = sha256_hex(request.note_text.encode('utf-8'))
+    # IMPORTANT: note_text is NEVER persisted in plaintext, only its hash
+    note_hash = sha256_hex(note_text.encode('utf-8'))
     
     patient_hash = None
     if request.patient_reference:
@@ -245,21 +278,35 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
 
 
 @router.get("/certificates/{certificate_id}")
-async def get_certificate(certificate_id: str) -> DocumentationIntegrityCertificate:
+async def get_certificate(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> DocumentationIntegrityCertificate:
     """
     Retrieve a certificate by its ID.
     
+    Requires X-Tenant-Id header for tenant isolation.
     Returns the stored certificate with no plaintext PHI.
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         Complete certificate
         
     Raises:
-        HTTPException: 404 if certificate not found
+        HTTPException: 400 if X-Tenant-Id header missing
+        HTTPException: 404 if certificate not found or tenant mismatch
     """
+    if not x_tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_tenant_id",
+                "message": "X-Tenant-Id header is required"
+            }
+        )
     import json
     from gateway.app.db.migrate import get_connection
     
@@ -276,23 +323,41 @@ async def get_certificate(certificate_id: str) -> DocumentationIntegrityCertific
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate_dict = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate_dict.get("tenant_id") != x_tenant_id:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "tenant_mismatch",
+                    "message": "Certificate not found"  # Don't reveal existence to other tenants
+                }
+            )
+        
         return DocumentationIntegrityCertificate(**certificate_dict)
     finally:
         conn.close()
 
 
 @router.post("/certificates/{certificate_id}/verify")
-async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
+async def verify_certificate(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a certificate.
     
+    Requires X-Tenant-Id header for tenant isolation.
+    
     Verifies:
-    1. Certificate exists
-    2. Chain hash is valid (recomputes from stored fields)
-    3. Signature is valid
+    1. Certificate exists and belongs to tenant
+    2. Timing integrity (if ehr_referenced_at is set)
+    3. Chain hash is valid (recomputes from stored fields)
+    4. Signature is valid
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         Verification result with:
@@ -310,6 +375,15 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
     from gateway.app.services.signer import verify_signature
     from gateway.app.services.storage import get_key
     
+    if not x_tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_tenant_id",
+                "message": "X-Tenant-Id header is required"
+            }
+        )
+    
     # Load certificate
     conn = get_connection()
     try:
@@ -324,6 +398,16 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "tenant_mismatch",
+                    "message": "Certificate not found"  # Don't reveal existence to other tenants
+                }
+            )
     finally:
         conn.close()
     
@@ -443,20 +527,29 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
 
 
 @router.get("/certificates/{certificate_id}/pdf")
-async def get_certificate_pdf(certificate_id: str) -> Response:
+async def get_certificate_pdf(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Response:
     """
     Generate and return certificate as a formal PDF document.
     
+    Requires X-Tenant-Id header for tenant isolation.
+    
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         PDF file as application/pdf
     """
+    if not x_tenant_id:
+        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
+    
     import json
     from gateway.app.db.migrate import get_connection
     
-    # Load certificate
+    # Load certificate with tenant check
     conn = get_connection()
     try:
         cursor = conn.execute("""
@@ -470,11 +563,15 @@ async def get_certificate_pdf(certificate_id: str) -> Response:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
     finally:
         conn.close()
     
-    # Verify certificate to get status
-    verification_result = await verify_certificate(certificate_id)
+    # Verify certificate to get status (with tenant header)
+    verification_result = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
     valid = verification_result.get("valid", False)
     
     # Generate PDF
@@ -491,9 +588,14 @@ async def get_certificate_pdf(certificate_id: str) -> Response:
 
 
 @router.get("/certificates/{certificate_id}/bundle")
-async def get_evidence_bundle(certificate_id: str) -> Response:
+async def get_evidence_bundle(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Response:
     """
     Generate and return complete evidence bundle as ZIP archive.
+    
+    Requires X-Tenant-Id header for tenant isolation.
     
     Bundle contains:
     - certificate.json
@@ -503,14 +605,18 @@ async def get_evidence_bundle(certificate_id: str) -> Response:
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         ZIP file as application/zip
     """
+    if not x_tenant_id:
+        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
+    
     import json
     from gateway.app.db.migrate import get_connection
     
-    # Load certificate
+    # Load certificate with tenant check
     conn = get_connection()
     try:
         cursor = conn.execute("""
@@ -524,11 +630,15 @@ async def get_evidence_bundle(certificate_id: str) -> Response:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
     finally:
         conn.close()
     
-    # Verify certificate
-    verification_report = await verify_certificate(certificate_id)
+    # Verify certificate (with tenant header)
+    verification_report = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
     
     # Generate PDF
     pdf_bytes = generate_certificate_pdf(certificate, valid=verification_report.get("valid", False))
