@@ -1,13 +1,23 @@
 # Production Readiness Checklist
 
+## ⚠️ CURRENT STATUS: NOT PRODUCTION-READY
+
+**Phase 1 Security**: ✅ Complete - Tenant isolation verified  
+**Production Deployment**: ❌ Not Ready - Critical hardening required
+
 ## Document Information
-- **Version**: 1.0
+- **Version**: 2.0
 - **Date**: 2026-02-18
 - **Target Audience**: DevOps, Security, Compliance Teams
+- **Purpose**: Comprehensive checklist for production deployment
 
-## Purpose
+## ⛔ DO NOT DEPLOY TO PRODUCTION UNTIL:
 
-This document provides a comprehensive checklist for deploying CDIL to production. **Do not deploy** until all critical items are addressed.
+1. ✅ All items marked **[CRITICAL]** are complete
+2. ✅ Security audit by qualified third party completed
+3. ✅ Penetration testing completed with all findings remediated
+4. ✅ Incident response procedures documented and tested
+5. ✅ Compliance requirements (HIPAA, SOC 2) verified if applicable
 
 ---
 
@@ -41,13 +51,24 @@ This document provides a comprehensive checklist for deploying CDIL to productio
 
 ## 2. Security Configuration
 
-### 2.1 Secrets Management
+### 2.1 Secrets Management **[CRITICAL]**
 
-**Critical**: Do NOT hardcode secrets in code or config files.
+**Status**: ❌ NOT IMPLEMENTED - Currently using hardcoded dev secrets
 
-- [ ] **JWT Secret Key**: Stored in AWS Secrets Manager, Azure Key Vault, or similar
+**Critical**: Do NOT use hardcoded secrets. ALL secrets must be in secrets manager.
+
+- [ ] **JWT Secret Key**: Stored in AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager
   - Env var: `JWT_SECRET_KEY`
+  - Current: Using `"dev-secret-key-change-in-production"` ⚠️
+  - **CRITICAL**: Dev secret is committed to git history and is COMPROMISED
+  - Production MUST use completely new secret (never use rotations of this value)
   - Length: Minimum 256 bits (32 bytes) for HS256
+  - Rotation: Every 90 days with zero-downtime rotation
+
+- [ ] **Tenant Signing Keys**: Migrate to KMS/HSM
+  - Current: Stored in SQLite database ⚠️
+  - Target: AWS KMS, Azure Key Vault, or GCP KMS
+  - Private keys should NEVER be in application database
   - Rotation: Every 90 days
 
 - [ ] **Database Credentials**: Stored in secrets manager
