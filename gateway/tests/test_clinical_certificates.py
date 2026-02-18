@@ -22,15 +22,15 @@ def client():
 def test_issue_certificate_minimal(client):
     """Test issuing a certificate with minimal required fields."""
     request = {
-        "tenant_id": "hospital-alpha",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Patient presents with mild fever and cough. Assessment: likely viral URI. Plan: rest and fluids.",
         "human_reviewed": True
     }
+    headers = {"X-Tenant-Id": "hospital-alpha"}
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert response.status_code == 200
     
     data = response.json()
@@ -62,7 +62,6 @@ def test_issue_certificate_minimal(client):
 def test_issue_certificate_with_phi_fields(client):
     """Test issuing a certificate with all PHI fields (which should be hashed)."""
     request = {
-        "tenant_id": "hospital-beta",
         "model_version": "gpt-4-clinical-v2",
         "prompt_version": "soap-note-v1.1",
         "governance_policy_version": "clinical-v2.0",
@@ -72,8 +71,9 @@ def test_issue_certificate_with_phi_fields(client):
         "patient_reference": "MRN-987654",
         "encounter_id": "enc-2026-02-18-001"
     }
+    headers = {"X-Tenant-Id": "hospital-beta"}
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert response.status_code == 200
     
     data = response.json()
@@ -95,10 +95,10 @@ def test_issue_certificate_with_phi_fields(client):
 def test_certificate_chain_linkage(client):
     """Test that certificates in the same tenant are properly chained."""
     tenant_id = "hospital-gamma"
+    headers = {"X-Tenant-Id": tenant_id}
     
     # Issue first certificate
     request1 = {
-        "tenant_id": tenant_id,
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -106,13 +106,12 @@ def test_certificate_chain_linkage(client):
         "human_reviewed": True
     }
     
-    response1 = client.post("/v1/clinical/documentation", json=request1)
+    response1 = client.post("/v1/clinical/documentation", json=request1, headers=headers)
     assert response1.status_code == 200
     cert1 = response1.json()["certificate"]
     
     # Issue second certificate for same tenant
     request2 = {
-        "tenant_id": tenant_id,
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -120,7 +119,7 @@ def test_certificate_chain_linkage(client):
         "human_reviewed": True
     }
     
-    response2 = client.post("/v1/clinical/documentation", json=request2)
+    response2 = client.post("/v1/clinical/documentation", json=request2, headers=headers)
     assert response2.status_code == 200
     cert2 = response2.json()["certificate"]
     
@@ -133,29 +132,29 @@ def test_tenant_isolation(client):
     """Test that different tenants have isolated chains."""
     # Issue certificate for tenant delta
     request_delta = {
-        "tenant_id": "hospital-delta",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tenant delta.",
         "human_reviewed": True
     }
+    headers_delta = {"X-Tenant-Id": "hospital-delta"}
     
-    response_delta = client.post("/v1/clinical/documentation", json=request_delta)
+    response_delta = client.post("/v1/clinical/documentation", json=request_delta, headers=headers_delta)
     assert response_delta.status_code == 200
     cert_delta = response_delta.json()["certificate"]
     
     # Issue certificate for tenant epsilon
     request_epsilon = {
-        "tenant_id": "hospital-epsilon",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tenant epsilon.",
         "human_reviewed": True
     }
+    headers_epsilon = {"X-Tenant-Id": "hospital-epsilon"}
     
-    response_epsilon = client.post("/v1/clinical/documentation", json=request_epsilon)
+    response_epsilon = client.post("/v1/clinical/documentation", json=request_epsilon, headers=headers_epsilon)
     assert response_epsilon.status_code == 200
     cert_epsilon = response_epsilon.json()["certificate"]
     
@@ -171,20 +170,20 @@ def test_get_certificate(client):
     """Test retrieving a certificate by ID."""
     # First issue a certificate
     request = {
-        "tenant_id": "hospital-zeta",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Test note for retrieval.",
         "human_reviewed": True
     }
+    headers = {"X-Tenant-Id": "hospital-zeta"}
     
-    issue_response = client.post("/v1/clinical/documentation", json=request)
+    issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
     certificate_id = issue_response.json()["certificate_id"]
     
     # Now retrieve it
-    get_response = client.get(f"/v1/certificates/{certificate_id}")
+    get_response = client.get(f"/v1/certificates/{certificate_id}", headers=headers)
     assert get_response.status_code == 200
     
     cert = get_response.json()
@@ -197,7 +196,8 @@ def test_get_certificate(client):
 
 def test_get_certificate_not_found(client):
     """Test retrieving a non-existent certificate."""
-    response = client.get("/v1/certificates/nonexistent-cert-id")
+    headers = {"X-Tenant-Id": "hospital-test"}
+    response = client.get("/v1/certificates/nonexistent-cert-id", headers=headers)
     assert response.status_code == 404
 
 
@@ -205,20 +205,20 @@ def test_verify_certificate_valid(client):
     """Test verifying a valid, untampered certificate."""
     # Issue a certificate
     request = {
-        "tenant_id": "hospital-eta",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for verification test.",
         "human_reviewed": True
     }
+    headers = {"X-Tenant-Id": "hospital-eta"}
     
-    issue_response = client.post("/v1/clinical/documentation", json=request)
+    issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
     certificate_id = issue_response.json()["certificate_id"]
     
     # Verify it
-    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify")
+    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=headers)
     assert verify_response.status_code == 200
     
     result = verify_response.json()
@@ -234,15 +234,15 @@ def test_verify_certificate_tampered(client):
     
     # Issue a certificate
     request = {
-        "tenant_id": "hospital-theta",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tampering test.",
         "human_reviewed": True
     }
+    headers = {"X-Tenant-Id": "hospital-theta"}
     
-    issue_response = client.post("/v1/clinical/documentation", json=request)
+    issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
     certificate_id = issue_response.json()["certificate_id"]
     
@@ -267,7 +267,7 @@ def test_verify_certificate_tampered(client):
         conn.close()
     
     # Verify the tampered certificate
-    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify")
+    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=headers)
     assert verify_response.status_code == 200
     
     result = verify_response.json()
@@ -283,7 +283,8 @@ def test_verify_certificate_tampered(client):
 
 def test_verify_certificate_not_found(client):
     """Test verifying a non-existent certificate."""
-    response = client.post("/v1/certificates/nonexistent-cert-id/verify")
+    headers = {"X-Tenant-Id": "hospital-test"}
+    response = client.post("/v1/certificates/nonexistent-cert-id/verify", headers=headers)
     assert response.status_code == 404
 
 
@@ -294,7 +295,6 @@ def test_no_plaintext_phi_in_storage(client):
     
     # Issue a certificate with PHI
     request = {
-        "tenant_id": "hospital-iota",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -303,8 +303,9 @@ def test_no_plaintext_phi_in_storage(client):
         "human_reviewer_id": "SENSITIVE_REVIEWER_ID_67890",
         "patient_reference": "SENSITIVE_PATIENT_MRN_11111"
     }
+    headers = {"X-Tenant-Id": "hospital-iota"}
     
-    issue_response = client.post("/v1/clinical/documentation", json=request)
+    issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
     certificate_id = issue_response.json()["certificate_id"]
     
