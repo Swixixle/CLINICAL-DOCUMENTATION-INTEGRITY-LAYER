@@ -28,6 +28,7 @@ def build_accountability_packet(
     policy_version_hash: str,
     policy_change_ref: str,
     rules_applied: List[str],
+    policy_decision: str,
     model_fingerprint: str,
     param_snapshot: Dict[str, Any],
     execution: Dict[str, Any]
@@ -44,7 +45,7 @@ def build_accountability_packet(
     Args:
         transaction_id: Unique transaction identifier
         gateway_timestamp_utc: ISO 8601 UTC timestamp
-        environment: Environment name (production, staging, dev)
+        environment: Environment name (prod, staging, dev)
         client_id: Client identifier
         intent_manifest: Intent type (e.g., "text-generation")
         feature_tag: Feature tag (e.g., "customer-support")
@@ -55,6 +56,7 @@ def build_accountability_packet(
         policy_version_hash: SHA-256 hash of policy version
         policy_change_ref: Policy change reference ID
         rules_applied: List of policy rules that were applied
+        policy_decision: Policy decision ("approved" or "denied")
         model_fingerprint: Model identifier/fingerprint
         param_snapshot: Dictionary of model parameters
         execution: Dictionary with execution details:
@@ -130,7 +132,8 @@ def build_accountability_packet(
         "policy_receipt": {
             "policy_version_hash": policy_version_hash,
             "policy_change_ref": policy_change_ref,
-            "rules_applied": rules_applied
+            "rules_applied": rules_applied,
+            "decision": policy_decision
         },
         
         # Execution result

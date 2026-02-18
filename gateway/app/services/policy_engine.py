@@ -16,8 +16,14 @@ from gateway.app.services.hashing import sha256_hex
 POLICY_VERSION = "v1.0.0-dev"
 POLICY_CHANGE_REF = "PCR-DEV-0001"
 
+# Default environment
+DEFAULT_ENVIRONMENT = "prod"
+
 # Allowed models (allowlist)
 ALLOWED_MODELS = ["gpt-4", "gpt-3.5-turbo", "claude-3-sonnet"]
+
+# Allowed tools (allowlist)
+ALLOWED_TOOLS = ["web_search", "calculator", "code_interpreter"]
 
 
 def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any]:
@@ -28,6 +34,7 @@ def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any
     - Model allowlist
     - Temperature constraints by feature_tag
     - Network access rules
+    - Tool permissions allowlist
     
     Args:
         request: Request dictionary with:
@@ -36,7 +43,9 @@ def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any
             - feature_tag: Feature tag (e.g., "billing")
             - environment: Environment name
             - intent_manifest: Intent type
-        environment: Environment name (production, staging, dev)
+            - network_access: Whether network access is requested (default: False)
+            - tool_permissions: List of requested tool permissions (default: [])
+        environment: Environment name (prod, staging, dev)
         
     Returns:
         Policy receipt dictionary with:
@@ -46,6 +55,7 @@ def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any
             - decision: "approved" or "denied"
             - decision_timestamp_utc: ISO 8601 timestamp
             - evaluation_latency_ms: Evaluation time in milliseconds
+            - denial_reasons: List of denial reasons (if denied)
     """
     start_time = time.time()
     
@@ -69,12 +79,22 @@ def evaluate_request(request: Dict[str, Any], environment: str) -> Dict[str, Any
             decision = "denied"
             denial_reasons.append(f"Billing feature requires temperature=0.0, got {temperature}")
     
-    # Rule 3: Network access must be False in production for billing
-    if environment == "production" and feature_tag == "billing":
-        rules_applied.append("network_denied")
-        # Note: network_access parameter is not yet exposed in the request schema.
-        # For Phase 2, we assume network_access is False for billing.
-        # In production, this would check: if request.get("network_access", False): deny
+    # Rule 3: Network access must be False in prod for billing
+    network_access = request.get("network_access", False)
+    if environment == "prod" and feature_tag == "billing":
+        rules_applied.append("billing_network_denied")
+        if network_access:
+            decision = "denied"
+            denial_reasons.append("Billing feature in prod environment prohibits network access")
+    
+    # Rule 4: Tool permissions allowlist
+    tool_permissions = request.get("tool_permissions", [])
+    if tool_permissions:
+        rules_applied.append("tool_allowlist")
+        forbidden_tools = [tool for tool in tool_permissions if tool not in ALLOWED_TOOLS]
+        if forbidden_tools:
+            decision = "denied"
+            denial_reasons.append(f"Tools not in allowlist: {', '.join(forbidden_tools)}")
     
     # Compute policy version hash (deterministic)
     policy_version_hash = sha256_hex(POLICY_VERSION.encode('utf-8'))

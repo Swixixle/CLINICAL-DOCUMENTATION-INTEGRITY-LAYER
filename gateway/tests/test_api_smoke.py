@@ -88,10 +88,10 @@ def test_get_key_by_id(client):
     """Test getting a specific key."""
     response = client.get("/v1/keys/dev-key-01")
     assert response.status_code == 200
-    key = response.json()
-    assert key["key_id"] == "dev-key-01"
-    assert key["status"] == "active"
-    assert "jwk" in key
+    jwk = response.json()
+    # Should return only JWK object, not wrapped
+    assert "kty" in jwk  # JWK should have key type
+    assert "x" in jwk  # EC public key should have x coordinate
 
 
 def test_get_key_not_found(client):

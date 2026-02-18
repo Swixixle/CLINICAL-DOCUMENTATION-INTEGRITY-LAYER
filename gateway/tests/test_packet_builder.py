@@ -40,6 +40,7 @@ def test_build_accountability_packet():
         policy_version_hash="sha256:policy123",
         policy_change_ref="change-001",
         rules_applied=["rule1", "rule2"],
+        policy_decision="approved",
         model_fingerprint="gpt-4",
         param_snapshot={"temperature": 0.7},
         execution=execution
@@ -116,6 +117,7 @@ def test_packet_no_wrapper():
         policy_version_hash="sha256:policy123",
         policy_change_ref="change-001",
         rules_applied=["rule1"],
+        policy_decision="approved",
         model_fingerprint="gpt-4",
         param_snapshot={"temperature": 0.7},
         execution=execution
@@ -164,6 +166,7 @@ def test_cross_tool_determinism():
         policy_version_hash="sha256:policy123",
         policy_change_ref="change-001",
         rules_applied=["rule1", "rule2"],
+        policy_decision="approved",
         model_fingerprint="gpt-4",
         param_snapshot={"temperature": 0.7},
         execution=execution
@@ -247,6 +250,7 @@ def test_protocol_version_pins():
         policy_version_hash="sha256:policy123",
         policy_change_ref="change-001",
         rules_applied=["rule1"],
+        policy_decision="approved",
         model_fingerprint="gpt-4",
         param_snapshot={"temperature": 0.7},
         execution=execution
@@ -291,6 +295,7 @@ def test_packet_with_denied_outcome():
         policy_version_hash="sha256:policy123",
         policy_change_ref="change-001",
         rules_applied=["model-not-approved"],
+        policy_decision="denied",
         model_fingerprint="gpt-5-preview",
         param_snapshot={"temperature": 0.7},
         execution=execution

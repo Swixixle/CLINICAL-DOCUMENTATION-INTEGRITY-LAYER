@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 from gateway.app.models import AICallRequest
+from gateway.app.models import AICallRequest, ModelRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
 from gateway.app.services.packet_builder import build_accountability_packet
@@ -44,8 +45,19 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     transaction_id = generate_uuid7()
     gateway_timestamp_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     
+    # Handle both new model_request and legacy model/temperature fields
+    if hasattr(request, 'model') and request.model:
+        # Legacy format
+        model = request.model
+        temperature = request.temperature if request.temperature is not None else 0.7
+    else:
+        # New format
+        model = request.model_request.model
+        temperature = request.model_request.temperature
+    
     # Step 2: Compute content hashes
-    prompt_hash = sha256_hex(request.prompt.encode('utf-8'))
+    prompt_text = request.prompt if isinstance(request.prompt, str) else str(request.prompt)
+    prompt_hash = sha256_hex(prompt_text.encode('utf-8'))
     
     rag_hash = None
     if request.rag_context:
@@ -57,11 +69,15 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         "model": request.model_request.model,
         "temperature": request.model_request.temperature,
         "max_tokens": request.model_request.max_tokens,
+        "model": model,
+        "temperature": temperature,
         "feature_tag": request.feature_tag,
         "network_access": request.network_access,
         "tool_permissions": request.tool_permissions,
         "environment": request.environment,
-        "intent_manifest": request.intent_manifest
+        "intent_manifest": request.intent_manifest,
+        "network_access": request.network_access,
+        "tool_permissions": request.tool_permissions
     }
     
     policy_receipt = evaluate_request(policy_request, request.environment)
@@ -72,6 +88,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
             "prompt": request.prompt,
             "model": request.model_request.model,
             "temperature": request.model_request.temperature
+            "prompt": prompt_text,
+            "model": model,
+            "temperature": temperature
         })
     else:
         # Denied execution stub
@@ -102,6 +121,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         rules_applied=policy_receipt["rules_applied"],
         model_fingerprint=request.model_request.model,
         param_snapshot={"temperature": request.model_request.temperature},
+        policy_decision=policy_receipt["decision"],
+        model_fingerprint=model,
+        param_snapshot={"temperature": temperature},
         execution=execution
     )
     
