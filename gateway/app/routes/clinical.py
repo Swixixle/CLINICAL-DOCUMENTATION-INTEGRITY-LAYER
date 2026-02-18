@@ -5,6 +5,7 @@ Handles certificate issuance and verification for AI-generated clinical notes.
 """
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from typing import Dict, Any
 from datetime import datetime, timezone
 
@@ -19,6 +20,8 @@ from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
 from gateway.app.services.verification_interpreter import interpret_verification
+from gateway.app.services.certificate_pdf import generate_certificate_pdf
+from gateway.app.services.evidence_bundle import generate_evidence_bundle
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
@@ -437,3 +440,111 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
         "failures": failures,
         "human_friendly_report": human_friendly_report
     }
+
+
+@router.get("/certificates/{certificate_id}/pdf")
+async def get_certificate_pdf(certificate_id: str) -> Response:
+    """
+    Generate and return certificate as a formal PDF document.
+    
+    Args:
+        certificate_id: Certificate identifier
+        
+    Returns:
+        PDF file as application/pdf
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Load certificate
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        certificate = json.loads(row['certificate_json'])
+    finally:
+        conn.close()
+    
+    # Verify certificate to get status
+    verification_result = await verify_certificate(certificate_id)
+    valid = verification_result.get("valid", False)
+    
+    # Generate PDF
+    pdf_bytes = generate_certificate_pdf(certificate, valid=valid)
+    
+    # Return PDF
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=certificate-{certificate_id}.pdf"
+        }
+    )
+
+
+@router.get("/certificates/{certificate_id}/bundle")
+async def get_evidence_bundle(certificate_id: str) -> Response:
+    """
+    Generate and return complete evidence bundle as ZIP archive.
+    
+    Bundle contains:
+    - certificate.json
+    - certificate.pdf
+    - verification_report.json
+    - README_VERIFICATION.txt
+    
+    Args:
+        certificate_id: Certificate identifier
+        
+    Returns:
+        ZIP file as application/zip
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Load certificate
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        certificate = json.loads(row['certificate_json'])
+    finally:
+        conn.close()
+    
+    # Verify certificate
+    verification_report = await verify_certificate(certificate_id)
+    
+    # Generate PDF
+    pdf_bytes = generate_certificate_pdf(certificate, valid=verification_report.get("valid", False))
+    
+    # Generate bundle
+    bundle_bytes = generate_evidence_bundle(
+        certificate=certificate,
+        certificate_pdf=pdf_bytes,
+        verification_report=verification_report
+    )
+    
+    # Return ZIP
+    return Response(
+        content=bundle_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=evidence-bundle-{certificate_id}.zip"
+        }
+    )
