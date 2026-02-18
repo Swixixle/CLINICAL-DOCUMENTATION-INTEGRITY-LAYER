@@ -1,6 +1,7 @@
 """
 Clinical Documentation Integrity Layer (CDIL) - FastAPI Application
 
+This is the main entry point for the CDIL API.
 This is the main entry point for the CDIL Gateway API.
 """
 

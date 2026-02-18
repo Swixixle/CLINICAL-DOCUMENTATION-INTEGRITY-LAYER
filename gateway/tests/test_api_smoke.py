@@ -1,5 +1,5 @@
 """
-Smoke tests for ELI Sentinel Gateway API.
+Smoke tests for Clinical Documentation Integrity Layer (CDIL) API.
 
 Tests the complete end-to-end flow:
 - Health check
