@@ -10,6 +10,8 @@ Security Model:
 - Per-tenant cryptographic keys
 """
 
+import os
+import uuid
 from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from typing import Dict, Any, Optional
 from fastapi.responses import Response
@@ -37,9 +39,6 @@ from gateway.app.routes.verify_utils import fail
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
 
 # Rate limiter instance (respects ENV=TEST for disabling in tests)
-import os
-import uuid
-
 def get_clinical_limiter():
     """Create rate limiter that respects test mode environment variables."""
     disable_limits = (

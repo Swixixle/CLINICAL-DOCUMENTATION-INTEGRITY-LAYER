@@ -3,19 +3,15 @@ Pytest configuration for CDIL tests.
 
 This file is loaded by pytest before any test modules are imported.
 It sets up the test environment, including disabling rate limiting.
+
+The environment variables are set at module level (not in pytest_configure)
+because they need to be available before any modules are imported during
+pytest's collection phase.
 """
 
 import os
 
-# CRITICAL: Set ENV=TEST to disable rate limiting BEFORE any modules are imported
-# This must happen at the very start, before pytest starts collecting tests
+# Set ENV=TEST to disable rate limiting BEFORE any modules are imported
+# This happens during pytest's initial import phase, before test collection
 os.environ["ENV"] = "TEST"
 os.environ["DISABLE_RATE_LIMITS"] = "1"
-
-def pytest_configure(config):
-    """
-    Pytest hook that runs at the very beginning of test execution.
-    This ensures environment variables are set before any test collection happens.
-    """
-    os.environ["ENV"] = "TEST"
-    os.environ["DISABLE_RATE_LIMITS"] = "1"
