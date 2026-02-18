@@ -1,7 +1,7 @@
 """
-Cryptographic signing and verification for ELI Sentinel.
+Cryptographic signing and verification for CDIL.
 
-This module provides signing capabilities for accountability packets.
+This module provides signing capabilities for certificates and accountability packets.
 In development, it uses local keys. In production, it can be extended
 to use AWS KMS, GCP KMS, Azure Key Vault, or HSMs.
 
@@ -129,21 +129,84 @@ def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def sign_generic_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sign an arbitrary message object using the dev private key.
+    
+    This is used for signing messages that don't follow the legacy
+    transaction canonical format (e.g., certificates).
+    
+    Args:
+        message_obj: Dictionary to sign (will be canonicalized)
+        
+    Returns:
+        Dictionary containing:
+            - algorithm: Algorithm identifier
+            - key_id: Key identifier
+            - canonical_message: Original message object
+            - signature: Base64-encoded signature
+    """
+    
+    return sign_generic_message(message_obj)
+
+
+def sign_generic_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sign an arbitrary message object using the dev private key.
+    
+    This is used for signing messages that don't follow the legacy
+    transaction canonical format (e.g., certificates).
+    
+    Args:
+        message_obj: Dictionary to sign (will be canonicalized)
+        
+    Returns:
+        Dictionary containing:
+            - algorithm: Algorithm identifier
+            - key_id: Key identifier
+            - canonical_message: Original message object
+            - signature: Base64-encoded signature
+    """
+    # Canonicalize the message
+    canonical_bytes = json_c14n_v1(message_obj)
+    
+    # Load private key
+    private_key = _load_private_key()
+    
+    # Sign the canonical bytes
+    signature = private_key.sign(
+        canonical_bytes,
+        ec.ECDSA(hashes.SHA256())
+    )
+    
+    # Encode signature as base64
+    signature_b64 = base64.b64encode(signature).decode('utf-8')
+    
+    return {
+        "algorithm": "ECDSA_SHA_256",
+        "key_id": "dev-key-01",
+        "canonical_message": message_obj,
+        "signature": signature_b64
+    }
+
+
 def verify_signature(bundle: Dict[str, Any], jwk: Dict[str, str]) -> bool:
     """
     Verify a signature bundle using a JWK public key.
     
+    Supports both legacy format (message/signature_b64) and new format (canonical_message/signature).
+    
     Args:
-        bundle: Signature bundle from sign_message()
+        bundle: Signature bundle from sign_message() or sign_generic_message()
         jwk: JWK public key dictionary
         
     Returns:
         True if signature is valid, False otherwise
     """
     try:
-        # Extract components
-        message_obj = bundle.get("message")
-        signature_b64 = bundle.get("signature_b64")
+        # Extract components - support both formats
+        message_obj = bundle.get("message") or bundle.get("canonical_message")
+        signature_b64 = bundle.get("signature_b64") or bundle.get("signature")
         
         if not message_obj or not signature_b64:
             return False
