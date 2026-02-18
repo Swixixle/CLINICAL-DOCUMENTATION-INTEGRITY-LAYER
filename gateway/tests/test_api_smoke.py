@@ -104,12 +104,17 @@ def test_ai_call_approved(client):
     """Test approved AI call flow."""
     request = {
         "prompt": "What is the capital of France?",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-01",
         "feature_tag": "customer-support",
         "user_ref": "user-123",
-        "model": "gpt-4",
-        "temperature": 0.7
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.7,
+            "max_tokens": 1000
+        }
     }
     
     response = client.post("/v1/ai/call", json=request)
@@ -132,12 +137,17 @@ def test_ai_call_denied_temperature(client):
     """Test denied AI call due to temperature constraint."""
     request = {
         "prompt": "Calculate total: $100",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-02",
         "feature_tag": "billing",  # billing requires temp=0.0
         "user_ref": "user-456",
-        "model": "gpt-4",
-        "temperature": 0.7  # Wrong temperature for billing
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.7,  # Wrong temperature for billing
+            "max_tokens": 1000
+        }
     }
     
     response = client.post("/v1/ai/call", json=request)
@@ -152,11 +162,16 @@ def test_ai_call_denied_model(client):
     """Test denied AI call due to model not in allowlist."""
     request = {
         "prompt": "Hello world",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "test-client-03",
         "feature_tag": "general",
-        "model": "gpt-5-turbo",  # Not in allowlist
-        "temperature": 0.7
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-5-turbo",  # Not in allowlist
+            "temperature": 0.7,
+            "max_tokens": 1000
+        }
     }
     
     response = client.post("/v1/ai/call", json=request)
@@ -174,8 +189,13 @@ def test_get_transaction(client):
         "environment": "dev",
         "client_id": "test-client-04",
         "feature_tag": "test",
-        "model": "gpt-4",
-        "temperature": 0.5
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.5,
+            "max_tokens": 1000
+        }
     }
     
     create_response = client.post("/v1/ai/call", json=request)
@@ -207,8 +227,13 @@ def test_verify_transaction_valid(client):
         "environment": "dev",
         "client_id": "test-client-05",
         "feature_tag": "test",
-        "model": "gpt-4",
-        "temperature": 0.0
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.0,
+            "max_tokens": 1000
+        }
     }
     
     create_response = client.post("/v1/ai/call", json=request)
@@ -221,9 +246,7 @@ def test_verify_transaction_valid(client):
     
     result = verify_response.json()
     assert result["valid"] is True
-    assert result["checks"]["halo_chain"] == "valid"
-    assert result["checks"]["signature"] == "valid"
-    assert result["checks"]["key"] == "found"
+    assert result["failures"] == []
 
 
 def test_verify_transaction_not_found(client):
@@ -243,12 +266,17 @@ def test_end_to_end_flow(client):
     # Step 1: Create transaction
     request = {
         "prompt": "End-to-end test prompt",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "e2e-client",
         "feature_tag": "testing",
         "user_ref": "e2e-user",
-        "model": "gpt-4",
-        "temperature": 0.8,
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.8,
+            "max_tokens": 1000
+        },
         "rag_context": {"doc1": "context data"}
     }
     
@@ -269,7 +297,7 @@ def test_end_to_end_flow(client):
     # Top-level fields
     assert packet["transaction_id"] == transaction_id
     assert packet["client_id"] == "e2e-client"
-    assert packet["environment"] == "production"
+    assert packet["environment"] == "prod"
     assert packet["feature_tag"] == "testing"
     assert packet["model_fingerprint"] == "gpt-4"
     
@@ -307,20 +335,23 @@ def test_end_to_end_flow(client):
     
     verify_result = verify_response.json()
     assert verify_result["valid"] is True
-    assert verify_result["checks"]["halo_chain"] == "valid"
-    assert verify_result["checks"]["signature"] == "valid"
-    assert verify_result["checks"]["key"] == "found"
+    assert verify_result["failures"] == []
 
 
 def test_billing_feature_approved_with_correct_temp(client):
     """Test that billing feature works with temperature=0.0."""
     request = {
         "prompt": "Calculate billing total",
-        "environment": "production",
+        "environment": "prod",
         "client_id": "billing-client",
         "feature_tag": "billing",
-        "model": "gpt-4",
-        "temperature": 0.0  # Correct temperature for billing
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.0,  # Correct temperature for billing
+            "max_tokens": 1000
+        }
     }
     
     response = client.post("/v1/ai/call", json=request)
@@ -329,3 +360,59 @@ def test_billing_feature_approved_with_correct_temp(client):
     data = response.json()
     assert data["status"] == "completed"
     assert data["output"] is not None
+
+
+def test_tamper_detection_policy_change_ref(client):
+    """
+    Test that tampering with policy_change_ref in HALO block is detected.
+    
+    This test verifies that modifying a field within a HALO block
+    results in a verification failure with appropriate error details.
+    """
+    # Step 1: Create a valid transaction
+    request = {
+        "prompt": "Test tamper detection",
+        "environment": "dev",
+        "client_id": "tamper-test-client",
+        "feature_tag": "test",
+        "intent_manifest": "text-generation",
+        "model_request": {
+            "provider": "openai",
+            "model": "gpt-4",
+            "temperature": 0.5,
+            "max_tokens": 1000
+        }
+    }
+    
+    create_response = client.post("/v1/ai/call", json=request)
+    assert create_response.status_code == 200
+    transaction_id = create_response.json()["transaction_id"]
+    
+    # Step 2: Retrieve the stored packet
+    get_response = client.get(f"/v1/transactions/{transaction_id}")
+    assert get_response.status_code == 200
+    packet = get_response.json()
+    
+    # Step 3: Tamper with policy_change_ref in HALO block 4 (Policy + Model block)
+    # This creates a mismatch between the block content and its stored hash
+    packet["halo_chain"]["blocks"][3]["policy_change_ref"] = "TAMPERED-PCR"
+    
+    # Step 4: Write the tampered packet back to the database
+    from gateway.app.services.storage import update_transaction
+    update_transaction(transaction_id, packet)
+    
+    # Step 5: Verify the transaction - should fail
+    verify_response = client.post(f"/v1/transactions/{transaction_id}/verify")
+    assert verify_response.status_code == 200
+    
+    result = verify_response.json()
+    assert result["valid"] is False
+    assert len(result["failures"]) > 0
+    
+    # Check that at least one failure is related to halo_chain
+    halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
+    assert len(halo_failures) > 0
+    
+    # Verify the failure message indicates a hash mismatch
+    failure_message = halo_failures[0]["message"]
+    assert "mismatch" in failure_message.lower() or "expected" in failure_message.lower()

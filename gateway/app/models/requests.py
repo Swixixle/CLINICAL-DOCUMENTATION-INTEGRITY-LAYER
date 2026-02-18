@@ -8,13 +8,13 @@ class ModelRequest(BaseModel):
     max_tokens: int
 
 class AICallRequest(BaseModel):
-    intent_manifest: str
-    feature_tag: str
-    user_ref: str
-    model_request: ModelRequest
     prompt: str
     environment: str
     client_id: str
+    feature_tag: str
+    model_request: ModelRequest
+    intent_manifest: str = "text-generation"
+    user_ref: str = "system"
     rag_context: dict | list | None = None
     tool_permissions: list[str] = []
     network_access: bool = False
