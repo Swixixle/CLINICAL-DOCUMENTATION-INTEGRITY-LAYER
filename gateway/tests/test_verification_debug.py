@@ -230,8 +230,10 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
     packet = get_transaction(transaction_id)
     original_final_hash = packet["halo_chain"]["final_hash"]
     
-    # Verify full hash is longer than 16 characters
-    assert len(original_final_hash) > 16
+    # Verify full hash has algorithm prefix (e.g., "sha256:") and is much longer than 16 chars
+    assert len(original_final_hash) > 16, f"Hash should be longer than prefix (16 chars), got {len(original_final_hash)}"
+    # Typical format: "sha256:64hexchars" = 71 chars total
+    assert original_final_hash.startswith("sha256:"), f"Expected sha256: prefix, got {original_final_hash[:10]}..."
     
     # Tamper with packet field to cause hash mismatch
     packet["policy_receipt"]["policy_change_ref"] = "TAMPERED"
@@ -272,7 +274,7 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
 def test_verify_utils_fail_helper():
     """Test the fail() helper function directly.
     
-    Ensures the helper produces consistent schema.
+    Ensures the helper produces consistent schema and handles edge cases.
     """
     from gateway.app.routes.verify_utils import fail
     
@@ -292,3 +294,17 @@ def test_verify_utils_fail_helper():
     f3 = fail("signature", "key_not_found", None)
     assert f3 == {"check": "signature", "error": "key_not_found"}
     assert "debug" not in f3
+    
+    # Failure with empty dict debug (treated as falsy, no debug key)
+    f4 = fail("halo_chain", "error_code", {})
+    assert f4 == {"check": "halo_chain", "error": "error_code"}
+    assert "debug" not in f4
+    
+    # Edge case: empty strings (should still work, though not recommended)
+    f5 = fail("", "")
+    assert f5 == {"check": "", "error": ""}
+    
+    # Verify structure always contains check and error keys
+    assert "check" in f1 and "error" in f1
+    assert "check" in f2 and "error" in f2
+    assert "check" in f3 and "error" in f3
