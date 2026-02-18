@@ -17,7 +17,7 @@ from gateway.app.models.clinical import (
 )
 from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
-from gateway.app.services.signer import sign_message
+from gateway.app.services.signer import sign_generic_message, verify_signature
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
@@ -191,7 +191,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     }
     
     # Step 7: Sign the certificate
-    signature_bundle = sign_message(canonical_message)
+    signature_bundle = sign_generic_message(canonical_message)
     
     # Step 8: Assemble complete certificate
     certificate_dict = {
