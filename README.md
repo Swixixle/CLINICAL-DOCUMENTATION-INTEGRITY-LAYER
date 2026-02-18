@@ -1,344 +1,223 @@
+# Clinical Documentation Integrity Layer (CDIL)
 
-
----
-
-# ELI Sentinel
-
-## Cryptographically Verifiable AI Governance Infrastructure
+CDIL issues cryptographically signed integrity certificates for AI-generated clinical notes at finalization.
 
 ---
 
-## Overview
+## Certificate Issuance Policy
 
-**ELI Sentinel** is a protocol-backed AI governance gateway.
+CDIL certificates are issued according to these requirements:
 
-It intercepts AI model calls, enforces policy **before execution**, and emits a **tamper-evident, cryptographically signed accountability packet** that can be verified **offline** without trusting Sentinel’s infrastructure.
-
-This is not a logging tool.
-This is not an observability platform.
-This is a **black-box recorder for AI decisions**.
-
-If a court, regulator, auditor, or insurer asks:
-
-> “Prove that this AI call followed approved governance at the time it executed.”
-
-ELI Sentinel produces a mathematically verifiable answer.
+* **Certificate issued only for finalized notes** – Certificates are created when clinical documentation is complete and ready for commitment to the EHR
+* **Issued before commit to EHR** – The certificate must be generated prior to storing the note in the Electronic Health Record
+* **Immutable** – Once issued, certificates cannot be modified
+* **No plaintext PHI** – Patient and clinical data are hashed; no plaintext Protected Health Information is stored in certificates
+* **Verifiable offline** – Certificates can be verified independently without accessing CDIL infrastructure
 
 ---
 
-# Core Outcome
+## Architecture
 
-For every AI transaction:
+```
+┌─────────────┐
+│   Clinician │
+│  + AI Tool  │
+└──────┬──────┘
+       │ 1. Generate note
+       │ 2. Human review
+       │ 3. Finalize
+       ▼
+┌─────────────────────────────────────┐
+│  Clinical Documentation             │
+│  Integrity Layer (CDIL)             │
+│                                     │
+│  ┌───────────────────────────────┐ │
+│  │ 1. Hash note content          │ │
+│  │ 2. Hash patient reference     │ │
+│  │ 3. Extend tenant chain        │ │
+│  │ 4. Sign certificate           │ │
+│  │ 5. Store certificate          │ │
+│  │ 6. Return certificate ID      │ │
+│  └───────────────────────────────┘ │
+└──────────────┬──────────────────────┘
+               │ Certificate issued
+               ▼
+        ┌─────────────┐
+        │     EHR     │
+        │  + Cert ID  │
+        └─────────────┘
+```
 
-1. Evaluate governance policy **pre-execution**
-2. Allow or deny execution
-3. Construct a deterministic **HALO chain**
-4. Sign a canonical message with a cryptographic key
-5. Persist a self-contained accountability packet
-6. Enable independent offline verification
+**6-Step Flow:**
 
----
-
-# System Capabilities
-
-## 1. Pre-Execution Policy Enforcement
-
-Policies are evaluated **before** the model is contacted.
-
-Checks may include:
-
-* Model allowlist
-* Feature-specific constraints (e.g., billing requires temperature=0.0)
-* Token ceilings
-* Tool permissions
-* Network access controls
-* Environment rules (dev/staging/prod)
-
-Denied calls never reach the provider.
-
----
-
-## 2. HALO Chain (Hash-Linked Accountability Ledger)
-
-Each transaction produces a deterministic five-block hash chain:
-
-1. Genesis
-2. Intent
-3. Inputs (hashes only)
-4. Policy + Model Snapshot
-5. Output (or Denial)
-
-Each block hashes the previous block’s hash plus canonicalized payload.
-
-Any modification breaks verification.
+1. **Note Generation** – AI system generates clinical documentation
+2. **Human Review** – Clinician reviews and approves the note
+3. **Finalization** – System calls CDIL to issue certificate
+4. **Hash Computation** – CDIL hashes note content and patient identifiers
+5. **Chain Extension** – Certificate is linked to tenant's integrity chain
+6. **Signature** – Certificate is cryptographically signed and stored
 
 ---
 
-## 3. Cryptographic Signing (Trust Anchor)
+## Integrity Chain
 
-Each transaction signs a canonical message:
+The **Integrity Chain** is a tamper-evident hash chain scoped to each tenant.
+
+Each certificate references the hash of the previous certificate in the tenant's chain:
+
+```
+Cert 1 → hash₁
+Cert 2 → hash₂ (includes hash₁)
+Cert 3 → hash₃ (includes hash₂)
+...
+```
+
+Any modification to a certificate breaks the chain, making tampering immediately detectable.
+
+**Properties:**
+
+* Sequential ordering of certificates within a tenant
+* Cryptographic linkage between certificates
+* Tamper-evident: changing any certificate invalidates all subsequent certificates
+* Append-only: certificates cannot be inserted retroactively
+
+---
+
+## Multi-Tenant Architecture
+
+CDIL provides complete tenant isolation:
+
+### Tenant-Scoped Integrity Chain
+
+* Each tenant maintains an independent integrity chain
+* Certificates from different tenants never cross-reference
+* Chain state is tracked per tenant_id
+* No linkage between tenant chains
+
+### Tenant-Scoped Signing Keys
+
+* Each tenant has dedicated signing keys
+* Keys are isolated in storage
+* Optional: Customer Managed Keys (CMK) / Bring Your Own Key (BYOK) for enterprise deployments (future)
+
+### Isolation Guarantees
+
+* No cross-tenant data access
+* No cross-tenant chain linkage
+* No shared cryptographic material
+* Tenant deletion cleanly removes all tenant data
+
+---
+
+## Certificate Example
 
 ```json
 {
-  "transaction_id": "...",
-  "gateway_timestamp_utc": "...",
-  "final_hash": "...",
-  "policy_version_hash": "...",
-  "client_key_fingerprint": "..."
+  "certificate_id": "01JCXM4K8N9P2R5T7V9W0X2Y4Z",
+  "tenant_id": "hospital-west-wing",
+  "timestamp": "2026-02-18T10:15:30Z",
+  "model_version": "gpt-4-clinical-v2",
+  "prompt_version": "soap-note-v1.2",
+  "governance_policy_version": "clinical-v3.1",
+  "note_hash": "a3f5d8e2b1c4...",
+  "patient_hash": "7e9f2a1b8c3d...",
+  "encounter_id": "enc-2026-02-18-001",
+  "human_reviewed": true,
+  "integrity_chain": {
+    "previous_hash": "e8f3a9d1c2b4...",
+    "chain_hash": "c5d2e9f1a8b3..."
+  },
+  "signature": {
+    "key_id": "cdil-tenant-key-hospital-west-wing-2026",
+    "algorithm": "ECDSA_SHA_256",
+    "signature": "MEUCIQDx3fK..."
+  }
 }
 ```
 
-Signature algorithm:
-
-* ECDSA_SHA_256 (preferred)
-* or RSA-PSS-SHA256
-
-Signing is pluggable:
-
-* Local dev keys
-* KMS (AWS/GCP/Azure)
-* HSM integration (future)
-
-Optional:
-
-* RFC 3161 trusted timestamp
+**Note:** All PHI fields (note content, patient identifiers) are stored as cryptographic hashes only.
 
 ---
 
-## 4. Accountability Packet
+## Verification
 
-Each transaction emits a full packet containing:
+### API Verification
 
-* Identifiers and timestamps
-* Intent + feature_tag
-* Model fingerprint
-* Parameter snapshot
-* Prompt hash / RAG hash
-* Policy receipt
-* Execution summary
-* HALO chain
-* Verification bundle
-* Data handling attestation
-* Enforcement mode
-
-The packet is self-contained and exportable as:
-
-* JSON
-* PDF (with embedded JSON)
-
----
-
-## 5. Offline Verifier
-
-A portable CLI tool verifies:
-
-* Schema validity
-* HALO chain integrity
-* Signature authenticity
-* Optional TSA timestamp
-* Policy provenance
-
-Verification does not require contacting Sentinel.
-
----
-
-## 6. Policy Governance (SOX-Grade Minimal Model)
-
-Policy changes follow:
-
-* Proposer
-* Approver
-* proposer ≠ approver (prod enforced)
-* Immutable policy versions
-* Append-only change log
-* Single mutable active pointer per environment
-
-This supports:
-
-* SOX 404
-* SOC 2
-* ISO 27001
-* Litigation defensibility
-
----
-
-## 7. Legal Hold
-
-Allows freezing scoped transactions for:
-
-* Litigation
-* Regulatory review
-* Discovery requests
-
-Generates signed Legal Hold Certificate.
-
----
-
-# Integration Modes
-
-ELI Sentinel supports multiple integration patterns:
-
-### API Gateway (Enforced Mode)
-
-Sentinel calls provider directly.
-
-### SDK Wrapper (Two-Phase)
-
-* Preflight policy approval
-* Client executes provider call
-* Finalize with output hash
-
-### Sidecar Proxy
-
-Zero code change deployment.
-
-### Orchestration Plugin
-
-Langchain / LlamaIndex callback integration.
-
-Each packet records `enforcement_mode`.
-
----
-
-# Architectural Principles
-
-These are non-negotiable:
-
-* Deterministic canonicalization (`json_c14n_v1`)
-* SHA-256 hashing
-* Signature required in production
-* Policy evaluated pre-execution
-* Raw prompt/output storage disabled by default
-* Packet must be self-contained
-* Separation-of-duties enforced in code
-
-If canonicalization drifts, verification collapses.
-
-Protocol integrity is the product.
-
----
-
-# What We Are NOT Building
-
-* Hallucination scoring
-* AI evaluation dashboards
-* Observability analytics
-* Blockchain anchoring
-* Prompt storage by default
-* Autonomous policy generation
-
-ELI Sentinel governs structure, not semantics.
-
----
-
-# Repository Structure (Planned)
-
-```
-eli-sentinel/
-  gateway/
-    app/
-      services/
-        c14n.py
-        hashing.py
-        halo.py
-        signer.py
-        policy_engine.py
-        packet_builder.py
-      routes/
-      models/
-  tools/
-    eli_verify.py
-  docs/
-    openapi.yaml
-    canonicalization.md
-    verification.md
+```bash
+curl -X POST https://cdil.example.com/v1/certificates/{certificate_id}/verify
 ```
 
----
+Response:
 
-# Build Order (Strict)
+```json
+{
+  "certificate_id": "01JCXM4K8N9P2R5T7V9W0X2Y4Z",
+  "valid": true,
+  "failures": []
+}
+```
 
-1. json_c14n_v1 + test vectors
-2. Hash utilities
-3. HALO chain compute + verify
-4. Signer interface + verification tests
-5. Packet schema
-6. Offline verifier CLI
-7. Policy governance endpoints
-8. `/v1/ai/call` end-to-end
-9. JSON + PDF exports
-10. Legal hold
-11. Usage reporting
+### Offline Verification
 
-Protocol primitives before API sugar.
+Certificates can be verified without accessing CDIL infrastructure:
 
----
+1. Recompute integrity chain from certificate fields
+2. Verify cryptographic signature using public key
+3. Check chain linkage (optional: verify against previous certificate)
 
-# Threat Model
+Offline verification requires:
 
-ELI Sentinel defends against:
-
-* Database tampering
-* Backdated records
-* Insider policy manipulation
-* Log deletion
-* Fabricated receipts
-* Silent policy changes
-
-If an attacker compromises the database but not the signing key,
-they cannot forge valid packets.
+* The certificate (JSON)
+* The tenant's public signing key (JWK)
+* (Optional) Previous certificate for chain verification
 
 ---
 
-# Quality Bar
+## Security Properties
 
-This system must:
-
-* Produce identical packets for identical inputs
-* Verify offline without contacting Sentinel
-* Prove policy executed before output
-* Survive operator distrust
-* Be explainable to an auditor in under 10 minutes
-
-If asked:
-
-> “Can this record be forged?”
-
-The correct answer must be:
-
-> “Only if you break SHA-256 or compromise the signing key.”
+* **Tamper-evident** – Any modification to a certificate breaks cryptographic verification
+* **Non-repudiation** – Signed certificates prove origin and cannot be forged without access to signing keys
+* **Immutable** – Certificates cannot be edited after issuance
+* **Offline verifiable** – Verification does not require trust in CDIL infrastructure
+* **PHI protection** – No plaintext Protected Health Information in certificates
+* **Tenant isolation** – Complete cryptographic and data separation between tenants
+* **Audit trail** – Integrity chain provides chronological ordering of all certificates
 
 ---
 
-# Project Status
+## Non-Goals
 
-This repository is in active development.
+CDIL does **not** provide:
 
-Initial focus:
-
-* Deterministic canonicalization
-* HALO chain
-* Signing + verification
-* Offline verifier
-
-UI and dashboards are explicitly out of scope.
+* **Content validation** – CDIL does not assess clinical accuracy or quality of notes
+* **EHR integration** – CDIL issues certificates; EHR systems must store and reference them
+* **Access control** – CDIL does not enforce who can read notes (EHR responsibility)
+* **Hallucination detection** – CDIL does not evaluate AI model output quality
+* **Prompt storage** – Prompts are hashed, not stored in plaintext
+* **Blockchain anchoring** – CDIL uses hash chains, not distributed ledgers
 
 ---
 
-## License
+## Intended Users
 
-TBD
+* **Healthcare organizations** using AI-assisted clinical documentation
+* **EHR vendors** integrating AI-generated content
+* **AI medical scribe vendors** requiring documentation integrity
+* **Compliance teams** needing audit trails for AI-generated clinical content
+* **Legal/risk teams** requiring non-repudiable records of AI usage in clinical settings
 
 ---
 
-Once this is committed, Copilot will understand:
+## Summary
 
-* This is a Python FastAPI protocol project
-* Determinism is critical
-* Cryptographic integrity is core
-* Governance precedes execution
+CDIL provides **durable, verifiable origin attestation** for AI-generated clinical documentation. By issuing cryptographically signed integrity certificates at note finalization, CDIL enables healthcare organizations to prove the provenance, integrity, and governance compliance of AI-generated content without storing Protected Health Information in plaintext.
 
+Every certificate is:
 
+* **Cryptographically signed** – proving origin and preventing forgery
+* **Hash-chained** – detecting tampering across the certificate sequence
+* **Tenant-isolated** – ensuring complete separation between organizations
+* **Offline verifiable** – enabling independent audit without infrastructure access
+* **PHI-safe** – storing only cryptographic hashes of sensitive data
 
-* The **`.github/copilot-instructions.md`** to lock Copilot into protocol-first mode
-* Or the **first 3 foundational files (c14n.py, hashing.py, halo.py)** ready to paste next
+CDIL transforms AI clinical documentation from "opaque output" to "verifiable, governed, auditable artifacts."
