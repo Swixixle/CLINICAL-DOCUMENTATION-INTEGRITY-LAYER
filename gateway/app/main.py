@@ -25,6 +25,12 @@ from gateway.app.db.migrate import ensure_schema, check_db_security
 
 
 # Initialize rate limiter with test mode bypass
+import uuid
+
+def get_test_mode_key_func():
+    """Return a unique key for each request in test mode to bypass rate limiting."""
+    return lambda: str(uuid.uuid4())
+
 def get_limiter():
     """
     Create rate limiter that can be disabled in test mode.
@@ -38,8 +44,9 @@ def get_limiter():
     )
     
     if disable_limits:
-        # Return a limiter with effectively unlimited rate
-        return Limiter(key_func=get_remote_address, default_limits=["1000000/minute"])
+        # In test mode, use a key function that returns a unique key per request
+        # This ensures each request gets its own rate limit bucket, effectively disabling limits
+        return Limiter(key_func=get_test_mode_key_func(), enabled=False)
     else:
         return Limiter(key_func=get_remote_address)
 
