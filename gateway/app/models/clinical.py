@@ -95,13 +95,9 @@ class CertificateIssuanceResponse(BaseModel):
     certificate_id: str = Field(..., description="Unique certificate identifier")
     certificate: DocumentationIntegrityCertificate = Field(..., description="Complete certificate")
     verify_url: str = Field(..., description="URL to verify this certificate")
-Clinical documentation models for healthcare-specific routes.
-"""
 
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
 
+# Additional models for healthcare-specific routes
 
 class ClinicalDocRequest(BaseModel):
     """Request model for clinical documentation integrity certificate generation."""

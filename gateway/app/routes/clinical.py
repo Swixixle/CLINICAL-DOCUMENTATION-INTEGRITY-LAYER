@@ -13,11 +13,16 @@ from gateway.app.models.clinical import (
     DocumentationIntegrityCertificate,
     CertificateIssuanceResponse,
     IntegrityChain,
-    SignatureBundle
+    SignatureBundle,
+    ClinicalDocRequest,
+    ClinicalDocResponse,
+    ClinicalDocumentationCertificate
 )
 from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
+from gateway.app.services.packet_builder import build_accountability_packet
+from gateway.app.services.storage import store_transaction
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
@@ -398,27 +403,11 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
         "valid": valid,
         "failures": failures
     }
-Clinical documentation endpoint for healthcare-specific integrity certificates.
 
-This wraps the existing AI execution + packet builder with healthcare-specific
-models and governance checks.
-"""
 
-from fastapi import APIRouter
-from datetime import datetime, timezone
-from typing import Dict, Any
+# Healthcare-specific clinical documentation router
 
-from gateway.app.models.clinical import (
-    ClinicalDocRequest,
-    ClinicalDocResponse,
-    ClinicalDocumentationCertificate
-)
-from gateway.app.services.hashing import sha256_hex
-from gateway.app.services.uuid7 import generate_uuid7
-from gateway.app.services.packet_builder import build_accountability_packet
-from gateway.app.services.storage import store_transaction
-
-router = APIRouter(prefix="/v1/clinical", tags=["clinical"])
+router2 = APIRouter(prefix="/v1/clinical", tags=["clinical"])
 
 
 def execute_governance_checks(
@@ -459,7 +448,7 @@ def execute_governance_checks(
     }
 
 
-@router.post("/documentation", response_model=ClinicalDocResponse)
+@router2.post("/documentation", response_model=ClinicalDocResponse)
 async def create_clinical_documentation_certificate(
     request: ClinicalDocRequest
 ) -> ClinicalDocResponse:
@@ -469,12 +458,12 @@ async def create_clinical_documentation_certificate(
     This endpoint:
     1. Hashes the clinical note and patient ID (never stores raw PHI)
     2. Executes governance checks (stubs in v1)
-    3. Generates integrity packet using existing HALO + packet builder
+    3. Generates integrity packet using existing infrastructure
     4. Stores the certificate
     5. Returns certificate with verification URL
     
     Flow:
-    - AI vendor → This endpoint → Integrity certificate
+    - AI vendor to this endpoint to integrity certificate
     - Certificate can be verified offline
     - No PHI stored in plaintext
     """
