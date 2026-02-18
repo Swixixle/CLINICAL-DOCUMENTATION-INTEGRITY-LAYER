@@ -174,7 +174,7 @@ def build_dashboard_payload(
     
     # Build headline
     if revenue_estimate.low == 0 and revenue_estimate.high == 0:
-        headline = "Preventable Revenue Loss: $0 (estimated - low risk)"
+        headline = "Preventable Revenue Loss: $0 (estimated)"
     else:
         headline = f"Preventable Revenue Loss: ${revenue_estimate.low:,.0f}–${revenue_estimate.high:,.0f} (estimated)"
     
