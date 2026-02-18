@@ -1,5 +1,5 @@
 """
-AI Adapter for ELI Sentinel Gateway.
+AI Adapter for CDIL Gateway.
 
 Executes AI model calls (stub implementation).
 """

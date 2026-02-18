@@ -1,3 +1,3 @@
 """
-API routes for ELI Sentinel Gateway.
+API routes for CDIL Gateway.
 """

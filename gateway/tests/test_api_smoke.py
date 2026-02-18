@@ -65,7 +65,7 @@ def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "ELI Sentinel Gateway"
+    assert data["service"] == "Clinical Documentation Integrity Layer"
     assert data["status"] == "operational"
 
 

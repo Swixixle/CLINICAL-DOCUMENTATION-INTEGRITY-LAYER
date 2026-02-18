@@ -1,5 +1,5 @@
--- ELI Sentinel Gateway Database Schema
--- SQLite MVP schema for transaction and key storage
+-- CDIL Gateway Database Schema
+-- SQLite MVP schema for transaction, certificate, and key storage
 
 -- Transactions table
 -- Stores full accountability packets as canonical JSON
@@ -31,3 +31,20 @@ CREATE TABLE IF NOT EXISTS keys (
 
 -- Index for active keys
 CREATE INDEX IF NOT EXISTS idx_keys_status ON keys(status);
+
+-- Certificates table
+-- Stores clinical documentation integrity certificates
+CREATE TABLE IF NOT EXISTS certificates (
+    certificate_id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    note_hash TEXT NOT NULL,
+    chain_hash TEXT NOT NULL,
+    certificate_json TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL
+);
+
+-- Indexes for certificate queries
+CREATE INDEX IF NOT EXISTS idx_certificates_tenant ON certificates(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_timestamp ON certificates(timestamp);
+CREATE INDEX IF NOT EXISTS idx_certificates_created ON certificates(created_at_utc);
