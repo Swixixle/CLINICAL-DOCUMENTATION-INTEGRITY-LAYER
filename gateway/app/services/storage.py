@@ -121,12 +121,6 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     # Serialize packet exactly as provided - no recomputation
     packet_json = json.dumps(packet, sort_keys=True)
     
-    # Extract indexed field from packet (read-only, no modification)
-        packet: Updated accountability packet dictionary (used as-is, no modifications)
-    """
-    # Serialize packet exactly as provided - NO MODIFICATIONS
-    packet_json = json.dumps(packet, sort_keys=True)
-    
     # Extract indexed fields from the provided packet (not recomputed)
     final_hash = packet["halo_chain"]["final_hash"]
     

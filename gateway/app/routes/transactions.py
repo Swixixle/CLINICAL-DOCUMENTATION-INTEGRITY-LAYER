@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 
 from gateway.app.services.storage import get_transaction
-from gateway.app.services.halo import verify_halo_chain
 from gateway.app.services.signer import verify_signature
 
 router = APIRouter(prefix="/v1/transactions", tags=["transactions"])
@@ -71,16 +70,6 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
         
         if stored_final_hash != recomputed_final_hash:
             # Hash leakage policy: return error code + prefixes only (first 16 chars)
-            stored_prefix = stored_final_hash[:16] if stored_final_hash else "none"
-            recomputed_prefix = recomputed_final_hash[:16] if recomputed_final_hash else "none"
-            failures.append({
-                "check": "halo_chain",
-                "error": "final_hash_mismatch",
-                "debug": {
-                    "stored_prefix": stored_prefix,
-                    "recomputed_prefix": recomputed_prefix
-                }
-            })
             # Use error code instead of full hash values (security best practice)
             # Include only hash prefixes for debugging without leaking full cryptographic material
             failure = {
@@ -90,8 +79,8 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             # Optional debug fields with hash prefixes only
             if stored_final_hash and recomputed_final_hash:
                 failure["debug"] = {
-                    "stored_prefix": stored_final_hash[:16] if stored_final_hash else None,
-                    "recomputed_prefix": recomputed_final_hash[:16] if recomputed_final_hash else None
+                    "stored_prefix": stored_final_hash[:16],
+                    "recomputed_prefix": recomputed_final_hash[:16]
                 }
             failures.append(failure)
     except Exception as e:
@@ -123,7 +112,7 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                 try:
                     with open(jwk_path, 'r') as f:
                         jwk = json.load(f)
-                except:
+                except Exception:
                     failures.append({
                         "check": "signature",
                         "error": "key_not_found_and_fallback_failed"
