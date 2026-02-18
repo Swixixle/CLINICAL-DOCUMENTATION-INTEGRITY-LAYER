@@ -253,6 +253,9 @@ def test_verify_detects_halo_tampering(client):
     halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
     assert len(halo_failures) > 0
     assert "final_hash_mismatch" in halo_failures[0]["error"]
+    # Verify error message includes both hashes for debugging
+    assert "recomputed" in halo_failures[0]["error"]
+    assert "stored" in halo_failures[0]["error"]
 
 
 def test_verify_detects_signature_tampering(client):
