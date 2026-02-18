@@ -162,7 +162,9 @@ CDIL provides **CFO-ready ROI modeling** to quantify the financial impact of dep
 
 **Endpoint:** `POST /v2/analytics/roi-projection`
 
-Calculate ROI projections programmatically for demos, financial modeling, and business case development. **No PHI processed** — this is pure financial modeling with no database access.
+Calculate ROI projections programmatically for demos, financial modeling, and business case development.
+
+> **⚠️ No PHI Processed:** This endpoint performs pure financial modeling with no database access and no patient health information. It's fully stateless computation.
 
 **Example Request:**
 ```json
