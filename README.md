@@ -204,7 +204,7 @@ Calculate ROI projections programmatically for demos, financial modeling, and bu
 # Start server
 uvicorn gateway.app.main:app --reload --port 8000
 
-# Test ROI endpoint
+# Test ROI endpoint with curl
 curl -X POST http://localhost:8000/v2/analytics/roi-projection \
   -H "Content-Type: application/json" \
   -d '{
@@ -218,6 +218,9 @@ curl -X POST http://localhost:8000/v2/analytics/roi-projection \
     "annual_claim_volume": 200000,
     "cdil_annual_cost": 250000
   }'
+
+# Or run the interactive demo (shows conservative/moderate/aggressive scenarios)
+./demo/roi_endpoint_demo.sh
 
 # Run ROI tests
 pytest gateway/tests/test_roi_projection.py -v
