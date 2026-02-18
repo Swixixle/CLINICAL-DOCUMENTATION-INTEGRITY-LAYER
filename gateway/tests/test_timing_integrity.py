@@ -154,7 +154,7 @@ def test_timing_integrity_valid_sequence(client):
     # Verify the certificate - should pass
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers=create_auditor_headers("timing-test-hospital")
+        headers=create_auditor_headers("timing-valid-hospital")
     )
     assert verify_response.status_code == 200
     
@@ -177,7 +177,7 @@ def test_timing_integrity_no_ehr_reference(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-test-hospital"))
+    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-no-ref-hospital"))
     assert response.status_code == 200
     
     cert_id = response.json()["certificate_id"]
@@ -185,7 +185,7 @@ def test_timing_integrity_no_ehr_reference(client):
     # Verify without setting ehr_referenced_at
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers=create_auditor_headers("timing-test-hospital")
+        headers=create_auditor_headers("timing-no-ref-hospital")
     )
     assert verify_response.status_code == 200
     

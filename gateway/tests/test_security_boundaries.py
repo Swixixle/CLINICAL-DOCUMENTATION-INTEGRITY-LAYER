@@ -69,7 +69,7 @@ def test_cross_tenant_read_isolation(client):
         "encounter_id": "ENC-ALPHA-001"
     }
     
-    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("test-tenant"))
+    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("tenant-hospital-alpha"))
     assert response_a.status_code == 200
     cert_a_id = response_a.json()["certificate_id"]
     
@@ -108,14 +108,14 @@ def test_cross_tenant_verify_isolation(client):
         "encounter_id": "ENC-GAMMA-001"
     }
     
-    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("test-tenant"))
+    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("tenant-clinic-gamma"))
     assert response_a.status_code == 200
     cert_a_id = response_a.json()["certificate_id"]
     
     # Verify tenant A can verify their own certificate
     verify_response_a = client.post(
         f"/v1/certificates/{cert_a_id}/verify",
-        headers=create_clinician_headers("tenant-clinic-gamma")
+        headers=create_auditor_headers("tenant-clinic-gamma")
     )
     assert verify_response_a.status_code == 200
     assert verify_response_a.json()["valid"] == True
