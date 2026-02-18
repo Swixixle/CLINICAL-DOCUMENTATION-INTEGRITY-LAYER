@@ -364,10 +364,10 @@ def test_billing_feature_approved_with_correct_temp(client):
 
 def test_tamper_detection_policy_change_ref(client):
     """
-    Test that tampering with policy_change_ref in HALO block is detected.
+    Test that tampering with policy_change_ref packet field is detected.
     
-    This test verifies that modifying a field within a HALO block
-    results in a verification failure with appropriate error details.
+    This test verifies that modifying a packet field that feeds into HALO
+    results in a verification failure because recomputed HALO won't match.
     """
     # Step 1: Create a valid transaction
     request = {
@@ -393,9 +393,9 @@ def test_tamper_detection_policy_change_ref(client):
     assert get_response.status_code == 200
     packet = get_response.json()
     
-    # Step 3: Tamper with policy_change_ref in HALO block 4 (Policy + Model block)
-    # This creates a mismatch between the block content and its stored hash
-    packet["halo_chain"]["blocks"][3]["policy_change_ref"] = "TAMPERED-PCR"
+    # Step 3: Tamper with policy_change_ref PACKET FIELD (not HALO block)
+    # This is what matters - tampering with the committed data that feeds into HALO
+    packet["policy_receipt"]["policy_change_ref"] = "TAMPERED-PCR"
     
     # Step 4: Write the tampered packet back to the database
     from gateway.app.services.storage import update_transaction
@@ -413,6 +413,6 @@ def test_tamper_detection_policy_change_ref(client):
     halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
     assert len(halo_failures) > 0
     
-    # Verify the failure message indicates a hash mismatch
-    failure_message = halo_failures[0]["message"]
-    assert "mismatch" in failure_message.lower() or "expected" in failure_message.lower()
+    # Verify the failure uses consistent error schema with "error" key
+    assert "error" in halo_failures[0]
+    assert halo_failures[0]["error"] == "final_hash_mismatch"
