@@ -20,7 +20,7 @@ import base64
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
@@ -308,7 +308,3 @@ def verify_signature(bundle: Dict[str, Any], jwk: Dict[str, str]) -> bool:
         
     except (InvalidSignature, ValueError, KeyError):
         return False
-
-
-# Type hint fix
-from typing import Optional
