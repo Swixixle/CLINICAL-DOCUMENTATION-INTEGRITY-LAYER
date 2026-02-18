@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="ELI Sentinel Gateway",
-    description="Cryptographically Verifiable AI Governance Infrastructure",
+    description="Clinical Decision Integrity Certificates for AI-Assisted Respiratory Care",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -52,6 +52,13 @@ async def root():
     """Root endpoint."""
     return {
         "service": "ELI Sentinel Gateway",
+        "tagline": "Clinical Decision Integrity Certificates for AI-Assisted Care",
+        "focus": "Respiratory Care Workflows",
         "version": "0.1.0",
-        "status": "operational"
+        "status": "operational",
+        "use_cases": [
+            "Sepsis prediction alerts",
+            "Ventilator weaning recommendations", 
+            "ABG trend interpretation"
+        ]
     }
