@@ -1,5 +1,5 @@
 """
-Policy Engine for ELI Sentinel Gateway.
+Policy Engine for CDIL Gateway.
 
 Evaluates governance policies pre-execution.
 This is a stub implementation shaped correctly for production.

@@ -1,5 +1,5 @@
--- ELI Sentinel Gateway Database Schema
--- SQLite MVP schema for transaction and key storage
+-- CDIL Gateway Database Schema
+-- SQLite MVP schema for transaction, certificate, and key storage
 
 -- Transactions table
 -- Stores full accountability packets as canonical JSON

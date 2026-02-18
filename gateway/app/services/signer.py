@@ -1,7 +1,7 @@
 """
-Cryptographic signing and verification for ELI Sentinel.
+Cryptographic signing and verification for CDIL.
 
-This module provides signing capabilities for accountability packets.
+This module provides signing capabilities for certificates and accountability packets.
 In development, it uses local keys. In production, it can be extended
 to use AWS KMS, GCP KMS, Azure Key Vault, or HSMs.
 

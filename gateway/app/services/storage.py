@@ -1,7 +1,7 @@
 """
-Storage service for ELI Sentinel Gateway.
+Storage service for CDIL Gateway.
 
-Provides abstraction over SQLite database for storing transactions and keys.
+Provides abstraction over SQLite database for storing transactions, certificates, and keys.
 Cleanly designed for future migration to PostgreSQL.
 """
 

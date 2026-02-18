@@ -1,5 +1,5 @@
 """
-Hashing utilities for the ELI Sentinel protocol.
+Hashing utilities for the CDIL protocol.
 
 Provides standardized hashing functions used throughout the system for
 creating tamper-evident identifiers and content hashes.
