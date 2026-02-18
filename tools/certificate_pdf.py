@@ -185,7 +185,7 @@ def create_certificate_pdf(packet: dict, output_path: str):
     story.append(Paragraph("Cryptographic Proof", section_style))
     
     final_hash = packet['halo_chain']['final_hash']
-    signature = packet['verification']['signature']
+    signature = packet['verification']['signature_b64']
     
     crypto_data = [
         ['HALO Chain Hash:', final_hash[:40] + '...'],

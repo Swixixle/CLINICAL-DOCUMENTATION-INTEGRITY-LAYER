@@ -149,7 +149,7 @@ async def create_clinical_documentation_certificate(
         patient_hash=patient_hash,
         timestamp=timestamp_utc,
         human_reviewed=request.human_reviewed,
-        signature=packet["verification"]["signature"],
+        signature=packet["verification"]["signature_b64"],
         final_hash=packet["halo_chain"]["final_hash"],
         governance_checks=governance_result["checks_executed"]
     )

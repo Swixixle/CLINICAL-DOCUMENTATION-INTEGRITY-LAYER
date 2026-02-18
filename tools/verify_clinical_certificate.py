@@ -93,7 +93,7 @@ def verify_signature(packet: dict) -> bool:
         from gateway.app.services.c14n import canonicalize
         
         verification = packet.get("verification", {})
-        signature = verification.get("signature")
+        signature = verification.get("signature_b64")
         public_key_pem = verification.get("public_key_pem")
         
         if not signature or not public_key_pem:
@@ -190,7 +190,7 @@ def display_certificate_info(packet: dict):
     print(f"\n🔗 HALO Chain Final Hash: {final_hash[:16]}...")
     
     # Signature
-    signature = packet['verification']['signature']
+    signature = packet['verification']['signature_b64']
     print(f"✍️  Signature: {signature[:32]}...")
     
     print("\n" + "="*70)
