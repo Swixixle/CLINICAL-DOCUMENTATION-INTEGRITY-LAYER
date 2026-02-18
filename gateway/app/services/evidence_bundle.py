@@ -1,17 +1,124 @@
 """
 Evidence Bundle Generation Service
 
-Creates ZIP archives containing:
-- Certificate JSON
-- Certificate PDF
-- Verification report JSON
-- README with verification instructions
+Creates evidence bundles in two formats:
+1. JSON bundle (primary) - structured evidence bundle for programmatic use
+2. ZIP archive - complete package with PDF, README, and verification instructions
+
+Evidence bundles provide hospitals with exportable artifacts for:
+- Payer appeals
+- Compliance audits
+- Legal proceedings
+- Regulatory submissions
 """
 
 import zipfile
 from io import BytesIO
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
+from datetime import datetime, timezone
+
+
+def build_evidence_bundle(
+    certificate: Dict[str, Any],
+    identity: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Build a structured evidence bundle (JSON) per INTEGRITY_ARTIFACT_SPEC.
+    
+    This is the primary evidence artifact for hospitals to export for:
+    - Appeals and litigation
+    - Compliance audits
+    - Regulatory submissions
+    
+    The bundle includes:
+    - Certificate metadata
+    - Canonical message (what was signed)
+    - Note hash and algorithm
+    - Model info (if available)
+    - Human attestation details
+    - Verification instructions
+    - Public key reference
+    
+    Args:
+        certificate: Complete certificate dictionary
+        identity: Optional tenant_id for authorization check
+        
+    Returns:
+        Structured evidence bundle dictionary
+    """
+    # Extract core metadata
+    metadata = {
+        "certificate_id": certificate.get("certificate_id"),
+        "tenant_id": certificate.get("tenant_id"),
+        "issued_at": certificate.get("timestamp"),
+        "key_id": certificate.get("signature", {}).get("key_id"),
+        "algorithm": certificate.get("signature", {}).get("algorithm")
+    }
+    
+    # Extract hashes
+    hashes = {
+        "note_hash": certificate.get("note_hash"),
+        "hash_algorithm": "SHA-256",
+        "patient_hash": certificate.get("patient_hash"),
+        "reviewer_hash": certificate.get("reviewer_hash")
+    }
+    
+    # Build model info (basic for now, Phase 2 will enhance this)
+    model_info = {
+        "model_version": certificate.get("model_version"),
+        "prompt_version": certificate.get("prompt_version"),
+        "governance_policy_version": certificate.get("governance_policy_version"),
+        "policy_hash": certificate.get("policy_hash")
+    }
+    
+    # Add model_id if present (Phase 2 enhancement)
+    if certificate.get("model_id"):
+        model_info["model_id"] = certificate.get("model_id")
+    
+    # Build human attestation
+    human_attestation = {
+        "reviewed": certificate.get("human_reviewed", False),
+        "reviewer_hash": certificate.get("reviewer_hash"),
+        "review_timestamp": certificate.get("finalized_at")  # Finalization is when review occurred
+    }
+    
+    # Attribution (Phase 2 - optional for now)
+    attribution = certificate.get("attribution")
+    
+    # Verification instructions
+    cert_id = certificate.get("certificate_id")
+    verification_instructions = {
+        "offline_cli": f"python verify_certificate_cli.py certificate.json",
+        "api_endpoint": f"POST /v1/certificates/{cert_id}/verify",
+        "manual_verification": "Recompute chain_hash and verify signature with public key"
+    }
+    
+    # Public key reference (prefer reference over embed)
+    key_id = certificate.get("signature", {}).get("key_id")
+    public_key_reference = {
+        "key_id": key_id,
+        "reference_url": f"GET /v1/keys/{key_id}"
+    }
+    
+    # Build complete bundle
+    bundle = {
+        "bundle_version": "1.0",
+        "generated_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "certificate": certificate,
+        "metadata": metadata,
+        "hashes": hashes,
+        "model_info": model_info,
+        "human_attestation": human_attestation,
+        "verification_instructions": verification_instructions,
+        "public_key_reference": public_key_reference
+    }
+    
+    # Add attribution if present (Phase 2)
+    if attribution:
+        bundle["attribution"] = attribution
+    
+    return bundle
 
 
 def generate_evidence_bundle(
@@ -21,6 +128,9 @@ def generate_evidence_bundle(
 ) -> bytes:
     """
     Generate a complete evidence bundle as a ZIP file.
+    
+    This is the secondary format (ZIP) for convenience.
+    The primary format is JSON via build_evidence_bundle().
     
     Args:
         certificate: Certificate dictionary
@@ -39,6 +149,10 @@ def generate_evidence_bundle(
         
         # Add certificate.pdf
         zipf.writestr('certificate.pdf', certificate_pdf)
+        
+        # Add evidence_bundle.json (structured bundle)
+        evidence_bundle_json = build_evidence_bundle(certificate)
+        zipf.writestr('evidence_bundle.json', json.dumps(evidence_bundle_json, indent=2))
         
         # Add verification_report.json
         verify_json = json.dumps(verification_report, indent=2)
