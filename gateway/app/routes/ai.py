@@ -6,14 +6,15 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
-import uuid
 
+from gateway.app.models import AICallRequest
 from gateway.app.models import AICallRequest, ModelRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
 from gateway.app.services.packet_builder import build_accountability_packet
 from gateway.app.services.storage import store_transaction
 from gateway.app.services.hashing import sha256_hex, hash_c14n
+from gateway.app.services.uuid7 import generate_uuid7
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
 
@@ -41,7 +42,7 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     7. Return response
     """
     # Step 1: Generate transaction_id and timestamp
-    transaction_id = str(uuid.uuid4())
+    transaction_id = generate_uuid7()
     gateway_timestamp_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     
     # Handle both new model_request and legacy model/temperature fields
@@ -64,9 +65,15 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     
     # Step 3: Evaluate policy (pre-execution)
     policy_request = {
+        "provider": request.model_request.provider,
+        "model": request.model_request.model,
+        "temperature": request.model_request.temperature,
+        "max_tokens": request.model_request.max_tokens,
         "model": model,
         "temperature": temperature,
         "feature_tag": request.feature_tag,
+        "network_access": request.network_access,
+        "tool_permissions": request.tool_permissions,
         "environment": request.environment,
         "intent_manifest": request.intent_manifest,
         "network_access": request.network_access,
@@ -78,6 +85,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     # Step 4: Execute AI call or create denial stub
     if policy_receipt["decision"] == "approved":
         execution = execute({
+            "prompt": request.prompt,
+            "model": request.model_request.model,
+            "temperature": request.model_request.temperature
             "prompt": prompt_text,
             "model": model,
             "temperature": temperature
@@ -85,7 +95,7 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     else:
         # Denied execution stub
         denial_reasons = policy_receipt.get("denial_reasons") or []
-        denial_message = "; ".join(denial_reasons) if denial_reasons else "Policy denied"
+        denial_message = "; ".join(denial_reasons) if denial_reasons else "Policy violation"
         execution = {
             "outcome": "denied",
             "output_hash": None,
@@ -109,6 +119,8 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         policy_version_hash=policy_receipt["policy_version_hash"],
         policy_change_ref=policy_receipt["policy_change_ref"],
         rules_applied=policy_receipt["rules_applied"],
+        model_fingerprint=request.model_request.model,
+        param_snapshot={"temperature": request.model_request.temperature},
         policy_decision=policy_receipt["decision"],
         model_fingerprint=model,
         param_snapshot={"temperature": temperature},
