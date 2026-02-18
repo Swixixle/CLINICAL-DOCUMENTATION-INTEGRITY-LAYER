@@ -18,7 +18,7 @@ class ClinicalDocumentationRequest(BaseModel):
     - patient_reference: hashed if provided
     - human_reviewer_id: hashed if provided
     
-    Note: tenant_id comes from X-Tenant-Id header, not from request body
+    Note: tenant_id is derived from JWT authentication, not from request body or headers
     """
     # Governance metadata
     model_version: str = Field(..., description="AI model version used to generate note")
