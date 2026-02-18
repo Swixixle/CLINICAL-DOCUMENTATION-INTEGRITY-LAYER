@@ -148,11 +148,52 @@ curl -X POST http://localhost:8000/v1/clinical/documentation \
 
 ---
 
+## Business Case / ROI Tools
+
+CDIL provides **CFO-ready ROI modeling** to quantify the financial impact of deploying integrity certificates for AI-generated clinical documentation.
+
+### ROI Calculator Template
+
+- **[ROI Calculator Template](./docs/ROI_CALCULATOR_TEMPLATE.md)** — Comprehensive Excel/Sheets template with formulas, worked examples, and sensitivity analysis
+- **[ROI One-Pager](./docs/ROI_ONE_PAGER.md)** — Executive-friendly summary with "denial insurance" framing and key assumptions
+
+### ROI Projection API
+
+**Endpoint:** `POST /v2/analytics/roi-projection`
+
+Calculate ROI projections programmatically for demos, financial modeling, and business case development.
+
+**Example Request:**
+```json
+{
+  "annual_revenue": 500000000,
+  "denial_rate": 0.08,
+  "documentation_denial_ratio": 0.40,
+  "appeal_recovery_rate": 0.25,
+  "denial_prevention_rate": 0.05,
+  "appeal_success_lift": 0.05,
+  "cost_per_appeal": 150,
+  "annual_claim_volume": 200000,
+  "cdil_annual_cost": 250000
+}
+```
+
+**Returns:** Complete ROI breakdown including prevented denials revenue, incremental appeal recovery, administrative savings, and ROI multiple.
+
+**Use Cases:**
+- CFO presentations with customized hospital metrics
+- Product demos with live ROI calculations
+- Financial modeling for business case approval
+- Revenue cycle team validation of assumptions
+
+---
+
 ## Use Cases
 
 1. **Regulatory Audit** — Export evidence bundles, demonstrate offline verification
 2. **Medical Malpractice Litigation** — Prove note content unchanged since issuance
 3. **Internal Quality Review** — Audit trail of AI-generated notes
+4. **Financial Planning** — ROI modeling for CDIL deployment business case
 
 ---
 
