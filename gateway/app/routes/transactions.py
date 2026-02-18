@@ -72,7 +72,7 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
         if stored_final_hash != recomputed_final_hash:
             failures.append({
                 "check": "halo_chain",
-                "error": "final_hash_mismatch"
+                "error": f"final_hash_mismatch: recomputed ({recomputed_final_hash}) != stored ({stored_final_hash})"
             })
     except Exception as e:
         failures.append({

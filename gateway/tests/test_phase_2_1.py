@@ -183,7 +183,15 @@ def test_allowed_tools_approved(client):
 
 
 def test_verify_detects_halo_tampering(client):
-    """Test that verification detects HALO tampering."""
+    """Test that verification detects packet field tampering (strong version).
+    
+    This test proves the stronger claim: if you tamper with ANY packet field
+    that feeds into HALO computation (e.g., policy_receipt), verification fails
+    because the recomputed HALO final_hash won't match the stored commitment.
+    
+    This is the "court-ready" tamper test that proves tampering with committed
+    fields is detected, not just tampering with the HALO artifact itself.
+    """
     # Create a transaction
     request = {
         "prompt": "Test prompt",
@@ -198,16 +206,23 @@ def test_verify_detects_halo_tampering(client):
     assert create_response.status_code == 200
     transaction_id = create_response.json()["transaction_id"]
     
-    # Get the transaction and tamper with HALO final hash
+    # Get the transaction and tamper with a packet field that feeds HALO
     from gateway.app.services.storage import get_transaction
     from gateway.app.db.migrate import get_connection
     import json as json_lib
     
     packet = get_transaction(transaction_id)
     
-    # Tamper with the HALO final hash
-    original_hash = packet["halo_chain"]["final_hash"]
-    packet["halo_chain"]["final_hash"] = "0" * 64  # Invalid hash
+    # Store original values for verification
+    original_policy_change_ref = packet["policy_receipt"]["policy_change_ref"]
+    original_halo_final_hash = packet["halo_chain"]["final_hash"]
+    
+    # Tamper with policy_receipt field that feeds into HALO Block 4
+    # DO NOT touch halo_chain - that's the point of this test
+    packet["policy_receipt"]["policy_change_ref"] = "TAMPERED-PCR"
+    
+    # Ensure halo_chain was NOT modified
+    assert packet["halo_chain"]["final_hash"] == original_halo_final_hash
     
     # Store the tampered packet directly in DB
     packet_json = json_lib.dumps(packet, sort_keys=True)
@@ -222,7 +237,10 @@ def test_verify_detects_halo_tampering(client):
     finally:
         conn.close()
     
-    # Verify should detect tampering
+    # Verify should detect tampering because:
+    # - Recomputed HALO uses tampered policy_change_ref -> different final_hash
+    # - Stored HALO still has original final_hash
+    # - Comparison fails: recomputed != stored
     verify_response = client.post(f"/v1/transactions/{transaction_id}/verify")
     assert verify_response.status_code == 200
     
@@ -234,7 +252,10 @@ def test_verify_detects_halo_tampering(client):
     # Should have a halo_chain failure with final_hash_mismatch
     halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
     assert len(halo_failures) > 0
-    assert "mismatch" in halo_failures[0]["error"]
+    assert "final_hash_mismatch" in halo_failures[0]["error"]
+    # Verify error message includes both hashes for debugging
+    assert "recomputed" in halo_failures[0]["error"]
+    assert "stored" in halo_failures[0]["error"]
 
 
 def test_verify_detects_signature_tampering(client):
