@@ -151,10 +151,10 @@ def test_timing_integrity_valid_sequence(client):
     finally:
         conn.close()
     
-    # Verify the certificate - should pass
+    # Verify the certificate - should pass (same tenant)
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers=create_auditor_headers("timing-valid-hospital")
+        headers=create_auditor_headers("timing-test-hospital")
     )
     assert verify_response.status_code == 200
     
