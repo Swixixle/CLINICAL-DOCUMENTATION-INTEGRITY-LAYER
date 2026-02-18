@@ -152,16 +152,19 @@ curl -X POST http://localhost:8000/v1/clinical/documentation \
 
 CDIL provides **CFO-ready ROI modeling** to quantify the financial impact of deploying integrity certificates for AI-generated clinical documentation.
 
-### ROI Calculator Template
+### Documentation
 
 - **[ROI Calculator Template](./docs/ROI_CALCULATOR_TEMPLATE.md)** — Comprehensive Excel/Sheets template with formulas, worked examples, and sensitivity analysis
 - **[ROI One-Pager](./docs/ROI_ONE_PAGER.md)** — Executive-friendly summary with "denial insurance" framing and key assumptions
+- **[ROI Implementation Summary](./docs/ROI_IMPLEMENTATION_SUMMARY.md)** — Technical implementation details and test results
 
 ### ROI Projection API
 
 **Endpoint:** `POST /v2/analytics/roi-projection`
 
 Calculate ROI projections programmatically for demos, financial modeling, and business case development.
+
+> **⚠️ No PHI Processed:** This endpoint performs pure financial modeling with no database access and no patient health information. It's fully stateless computation.
 
 **Example Request:**
 ```json
@@ -178,13 +181,66 @@ Calculate ROI projections programmatically for demos, financial modeling, and bu
 }
 ```
 
-**Returns:** Complete ROI breakdown including prevented denials revenue, incremental appeal recovery, administrative savings, and ROI multiple.
+**Example Response:**
+```json
+{
+  "total_denied_revenue": 40000000.0,
+  "documentation_denied_revenue": 16000000.0,
+  "prevented_denials_revenue": 800000.0,
+  "remaining_documentation_denied_revenue": 15200000.0,
+  "current_recovered_revenue": 3800000.0,
+  "incremental_recovery_gain": 760000.0,
+  "appeals_avoided_count": 320.0,
+  "admin_savings": 48000.0,
+  "total_preserved_revenue": 1608000.0,
+  "roi_multiple": 6.432,
+  "roi_note": null,
+  "assumptions": { ...input echo... }
+}
+```
+
+**Run Locally:**
+```bash
+# Start server
+uvicorn gateway.app.main:app --reload --port 8000
+
+# Test ROI endpoint
+curl -X POST http://localhost:8000/v2/analytics/roi-projection \
+  -H "Content-Type: application/json" \
+  -d '{
+    "annual_revenue": 500000000,
+    "denial_rate": 0.08,
+    "documentation_denial_ratio": 0.40,
+    "appeal_recovery_rate": 0.25,
+    "denial_prevention_rate": 0.05,
+    "appeal_success_lift": 0.05,
+    "cost_per_appeal": 150,
+    "annual_claim_volume": 200000,
+    "cdil_annual_cost": 250000
+  }'
+
+# Run ROI tests
+pytest gateway/tests/test_roi_projection.py -v
+```
 
 **Use Cases:**
 - CFO presentations with customized hospital metrics
 - Product demos with live ROI calculations
 - Financial modeling for business case approval
 - Revenue cycle team validation of assumptions
+
+### Important Disclaimers
+
+⚠️ **ROI Projections Are Estimates:**
+- ROI outputs are projections based on your inputs; **not guarantees** of actual results
+- Actual ROI will vary based on hospital operations, payer mix, and implementation quality
+- Defaults are conservative (5% prevention rate, 5% appeal lift); your finance team should adjust assumptions based on your hospital's baseline metrics
+
+⚠️ **Recommended Approach:**
+- Start with conservative assumptions (5%/5%) for initial presentations
+- Validate assumptions with your revenue cycle and finance teams
+- Use sensitivity analysis to understand range of potential outcomes
+- Monitor actual performance against projections after deployment
 
 ---
 
