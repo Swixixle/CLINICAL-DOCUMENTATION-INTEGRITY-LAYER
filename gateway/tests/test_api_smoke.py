@@ -65,7 +65,7 @@ def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "Clinical Documentation Integrity Layer"
+    assert data["service"] == "Clinical Documentation Integrity Layer (CDIL)"
     assert data["status"] == "operational"
 
 

@@ -1,9 +1,11 @@
 """
-HALO Chain (Hash-Linked Accountability Ledger) implementation.
+Integrity Chain (Hash-Linked Accountability Ledger) implementation.
 
-The HALO chain is a deterministic five-block hash chain that provides
+The Integrity Chain is a deterministic five-block hash chain that provides
 tamper-evident accountability for AI transactions. Each block includes
 the hash of the previous block, making any modification detectable.
+
+Implementation note: Internally referred to as "HALO" for code consistency.
 
 Block Structure:
 1. Genesis: transaction metadata and environment
@@ -148,10 +150,10 @@ def build_halo_chain(
 
 def verify_halo_chain(halo: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Verify the integrity of a HALO chain.
+    Verify the integrity of an Integrity Chain (HALO).
     
     Args:
-        halo: HALO chain dictionary with blocks and block_hashes
+        halo: Integrity Chain dictionary with blocks and block_hashes
         
     Returns:
         Dictionary with:
