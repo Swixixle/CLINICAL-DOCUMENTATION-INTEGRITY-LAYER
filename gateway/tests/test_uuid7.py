@@ -8,6 +8,6 @@ def test_uuid7_is_valid_uuid():
 
 def test_uuid7_byte_ordering_increases():
     a = uuid.UUID(generate_uuid7())
-    time.sleep(0.002)
+    time.sleep(0.005)  # 5ms to ensure different timestamp
     b = uuid.UUID(generate_uuid7())
     assert a.bytes < b.bytes
