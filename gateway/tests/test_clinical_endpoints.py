@@ -4,6 +4,8 @@ Tests for clinical documentation endpoints.
 
 import pytest
 from fastapi.testclient import TestClient
+
+from gateway.tests.auth_helpers import create_clinician_headers, create_auditor_headers
 from pathlib import Path
 import tempfile
 import shutil
@@ -58,7 +60,7 @@ def test_clinical_documentation_certificate_generation(client):
         "patient_reference": "PATIENT-TEST-001"
     }
     
-    headers = {"X-Tenant-Id": "test-tenant-001"}
+    headers = create_clinician_headers("test-tenant-001")
     response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
@@ -99,7 +101,7 @@ def test_clinical_documentation_no_phi_stored(client):
         "patient_reference": "PATIENT-SENSITIVE-DATA"
     }
     
-    headers = {"X-Tenant-Id": "test-tenant-002"}
+    headers = create_clinician_headers("test-tenant-002")
     response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
@@ -130,7 +132,7 @@ def test_clinical_documentation_human_review_tracking(client):
         "patient_reference": "PATIENT-TEST-003"
     }
     
-    headers = {"X-Tenant-Id": "test-tenant-003"}
+    headers = create_clinician_headers("test-tenant-003")
     response = client.post("/v1/clinical/documentation", json=request_with_review, headers=headers)
     assert response.status_code == 200
     cert = response.json()["certificate"]
@@ -188,7 +190,7 @@ def test_clinical_documentation_governance_metadata(client):
         "patient_reference": "PATIENT-TEST-004"
     }
     
-    headers = {"X-Tenant-Id": "test-tenant-004"}
+    headers = create_clinician_headers("test-tenant-004")
     response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
@@ -211,7 +213,7 @@ def test_clinical_documentation_different_note_types(client):
         "procedure_note"
     ]
     
-    headers = {"X-Tenant-Id": "test-tenant-005"}
+    headers = create_clinician_headers("test-tenant-005")
     
     for idx, scenario in enumerate(scenarios):
         request_data = {
@@ -237,7 +239,7 @@ def test_clinical_documentation_hash_consistency(client):
     note_text = "Identical clinical note for hash testing."
     patient_ref = "PATIENT-HASH-TEST"
     
-    headers = {"X-Tenant-Id": "test-tenant-006"}
+    headers = create_clinician_headers("test-tenant-006")
     
     request_data = {
         "model_version": "gpt-4",
@@ -278,6 +280,6 @@ def test_clinical_documentation_required_fields(client):
         "human_reviewed": False
     }
     
-    headers = {"X-Tenant-Id": "test-tenant-007"}
+    headers = create_clinician_headers("test-tenant-007")
     response = client.post("/v1/clinical/documentation", json=incomplete_request, headers=headers)
     assert response.status_code == 422  # Validation error
