@@ -234,6 +234,9 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
     assert len(original_final_hash) > 16, f"Hash should be longer than prefix (16 chars), got {len(original_final_hash)}"
     # Typical format: "sha256:64hexchars" = 71 chars total
     assert original_final_hash.startswith("sha256:"), f"Expected sha256: prefix, got {original_final_hash[:10]}..."
+    # Verify the hash portion (after algorithm prefix) is at least 64 chars
+    hash_portion = original_final_hash.split(":", 1)[1] if ":" in original_final_hash else original_final_hash
+    assert len(hash_portion) >= 64, f"Expected at least 64 hex chars in hash, got {len(hash_portion)}"
     
     # Tamper with packet field to cause hash mismatch
     packet["policy_receipt"]["policy_change_ref"] = "TAMPERED"
@@ -265,6 +268,11 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
     # CRITICAL: Prefixes must be exactly 16 characters
     assert len(failure["debug"]["stored_prefix"]) == 16
     assert len(failure["debug"]["recomputed_prefix"]) == 16
+    
+    # CRITICAL: Prefixes should be taken from the start of the full hash
+    # The prefix includes the algorithm prefix if present
+    assert original_final_hash.startswith(failure["debug"]["stored_prefix"]), \
+        f"Stored prefix '{failure['debug']['stored_prefix']}' should be from start of hash '{original_final_hash[:20]}...'"
     
     # CRITICAL: Full hash must NOT appear anywhere in the response
     result_str = json.dumps(result)
