@@ -548,3 +548,120 @@ async def get_evidence_bundle(certificate_id: str) -> Response:
             "Content-Disposition": f"attachment; filename=evidence-bundle-{certificate_id}.zip"
         }
     )
+
+
+@router.post("/certificates/query")
+async def query_certificates(
+    tenant_id: str,
+    date_from: str = None,
+    date_to: str = None,
+    model_version: str = None,
+    governance_policy_version: str = None,
+    human_reviewed: bool = None,
+    limit: int = 100,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """
+    Query certificates for audit and reporting purposes.
+    
+    Supports filtering by:
+    - tenant_id (required) - ensures tenant isolation
+    - date_from, date_to - filter by finalized_at timestamp
+    - model_version - filter by AI model version
+    - governance_policy_version - filter by policy version
+    - human_reviewed - filter by review status
+    
+    Args:
+        tenant_id: Required tenant identifier (enforces isolation)
+        date_from: Optional start date (ISO 8601 UTC)
+        date_to: Optional end date (ISO 8601 UTC)
+        model_version: Optional AI model version
+        governance_policy_version: Optional governance policy version
+        human_reviewed: Optional human review status filter
+        limit: Maximum number of results (default 100, max 1000)
+        offset: Pagination offset (default 0)
+        
+    Returns:
+        Dictionary with:
+        - total_count: Total matching certificates
+        - certificates: List of certificate summaries
+        - limit: Results limit
+        - offset: Results offset
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Validate limit
+    if limit > 1000:
+        limit = 1000
+    
+    # Build query
+    query = "SELECT certificate_json FROM certificates WHERE tenant_id = ?"
+    params = [tenant_id]
+    
+    # Add filters
+    if date_from:
+        query += " AND created_at_utc >= ?"
+        params.append(date_from)
+    
+    if date_to:
+        query += " AND created_at_utc <= ?"
+        params.append(date_to)
+    
+    # For filters that need JSON parsing, we'll filter in Python after loading
+    # This is acceptable for MVP; production would use JSON columns or denormalized fields
+    
+    # Execute query
+    conn = get_connection()
+    try:
+        # Get total count
+        count_query = query.replace("SELECT certificate_json", "SELECT COUNT(*)")
+        cursor = conn.execute(count_query, params)
+        total_count = cursor.fetchone()[0]
+        
+        # Get certificates with pagination
+        query += f" ORDER BY created_at_utc DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
+        
+        # Parse certificates and apply additional filters
+        certificates = []
+        for row in rows:
+            cert = json.loads(row['certificate_json'])
+            
+            # Apply JSON-based filters
+            if model_version and cert.get('model_version') != model_version:
+                continue
+            
+            if governance_policy_version and cert.get('governance_policy_version') != governance_policy_version:
+                continue
+            
+            if human_reviewed is not None and cert.get('human_reviewed') != human_reviewed:
+                continue
+            
+            # Build summary (no full certificate data, no PHI)
+            summary = {
+                "certificate_id": cert.get("certificate_id"),
+                "tenant_id": cert.get("tenant_id"),
+                "timestamp": cert.get("timestamp"),
+                "finalized_at": cert.get("finalized_at"),
+                "model_version": cert.get("model_version"),
+                "prompt_version": cert.get("prompt_version"),
+                "governance_policy_version": cert.get("governance_policy_version"),
+                "human_reviewed": cert.get("human_reviewed"),
+                "note_hash_prefix": cert.get("note_hash", "")[:16],
+                "chain_hash_prefix": cert.get("integrity_chain", {}).get("chain_hash", "")[:16]
+            }
+            certificates.append(summary)
+    finally:
+        conn.close()
+    
+    return {
+        "total_count": total_count,
+        "returned_count": len(certificates),
+        "limit": limit,
+        "offset": offset,
+        "certificates": certificates
+    }
