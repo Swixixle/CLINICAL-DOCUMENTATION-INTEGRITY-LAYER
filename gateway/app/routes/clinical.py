@@ -36,8 +36,24 @@ from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
 
-# Rate limiter instance
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiter instance (respects ENV=TEST for disabling in tests)
+import os
+import uuid
+
+def get_clinical_limiter():
+    """Create rate limiter that respects test mode environment variables."""
+    disable_limits = (
+        os.environ.get("ENV") == "TEST" or
+        os.environ.get("DISABLE_RATE_LIMITS") == "1"
+    )
+    
+    if disable_limits:
+        # In test mode, return a disabled limiter
+        return Limiter(key_func=lambda: str(uuid.uuid4()), enabled=False)
+    else:
+        return Limiter(key_func=get_remote_address)
+
+limiter = get_clinical_limiter()
 
 
 def get_tenant_chain_head(tenant_id: str) -> str | None:
