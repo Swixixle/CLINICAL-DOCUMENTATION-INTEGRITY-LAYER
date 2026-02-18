@@ -6,6 +6,8 @@
 
 The **Clinical Documentation Integrity Layer (CDIL)** is denial insurance for AI-generated clinical documentation. It prevents revenue loss and increases appeal success rates through cryptographically verifiable evidence.
 
+**For detailed ROI calculation formulas, see:** [ROI Calculator Template](./ROI_CALCULATOR_TEMPLATE.md)
+
 ---
 
 ## The Problem
@@ -258,6 +260,34 @@ Contact your CDIL implementation team to:
 
 ---
 
+## Important Disclaimers
+
+⚠️ **These Are Projections, Not Guarantees**
+- ROI calculations are **estimates** based on conservative industry assumptions
+- Actual results will vary based on your hospital's specific circumstances:
+  - Baseline denial rates and mix
+  - Payer relationships and contracts
+  - Quality of implementation and adoption
+  - Documentation practices and workflows
+- Your finance team should validate all assumptions against historical data
+
+⚠️ **Conservative Defaults Explained**
+- **5% denial prevention rate:** Represents first-year performance, proven achievable
+- **5% appeal success lift:** Minimal incremental benefit from evidence bundles
+- **40% documentation denial ratio:** Mid-range of HFMA benchmark (30-50%)
+- These defaults are intentionally conservative to avoid overpromising
+
+⚠️ **Recommended Validation Steps**
+1. Review 12+ months of historical denial data
+2. Validate documentation-related denial ratio with revenue cycle team
+3. Confirm current appeal recovery rate and cost per appeal
+4. Adjust assumptions based on your hospital's actual performance
+5. Run sensitivity analysis to understand range of potential outcomes
+
+**Use this model for planning and budgeting, not as a guarantee of results.**
+
+---
+
 ## Bottom Line
 
 **"When payers audit with AI, you need AI to defend your revenue."**
@@ -266,9 +296,9 @@ CDIL is denial insurance that:
 - ✅ Prevents denials before they happen
 - ✅ Increases appeal success rates
 - ✅ Reduces administrative costs
-- ✅ Delivers 6-18x ROI (scenario-dependent)
+- ✅ Delivers 6-18x ROI (scenario-dependent, based on conservative assumptions)
 
-**Even in the most conservative scenario, CDIL pays for itself more than 6x over.**
+**Even in the most conservative scenario, CDIL can pay for itself more than 6x over — but validate assumptions with your finance team.**
 
 ---
 

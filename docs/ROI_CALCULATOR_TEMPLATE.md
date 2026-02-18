@@ -212,6 +212,45 @@ CDIL acts as "denial insurance" by:
 
 ---
 
+## Important Disclaimers & Validation
+
+### ⚠️ These Are Financial Projections
+
+**Not Guarantees of Results:**
+- This calculator produces **estimates** based on your input assumptions
+- Actual ROI will vary based on:
+  - Quality of implementation and clinician adoption
+  - Payer mix and contract terms
+  - Baseline documentation quality
+  - Revenue cycle team effectiveness
+- Use for budgeting and planning, not as guaranteed outcomes
+
+### ⚠️ Conservative Defaults Provided
+
+**Recommended Starting Assumptions:**
+- **Denial Prevention Rate:** 5-10% (first-year performance)
+- **Appeal Success Lift:** 5-10% (incremental benefit from evidence)
+- **Documentation Denial Ratio:** 30-50% (HFMA benchmark range)
+
+**Why Conservative:**
+- Reduces risk of overpromising to CFO
+- First-year performance typically lower than optimized steady-state
+- Provides upside potential as system is optimized
+
+### ⚠️ Finance Team Must Validate
+
+**Before CFO Presentation:**
+1. ✅ Confirm denial rate matches your hospital's 12-month average
+2. ✅ Validate documentation denial ratio with revenue cycle team
+3. ✅ Verify cost per appeal includes all labor and overhead
+4. ✅ Ensure CDIL annual cost is complete (licensing + integration + training)
+5. ✅ Run sensitivity analysis with conservative/moderate/aggressive scenarios
+6. ✅ Compare assumptions to published HFMA benchmarks
+
+**This model is a starting point. Your finance team should customize all assumptions.**
+
+---
+
 ## Validation Checklist
 
 Before presenting to CFO:
@@ -221,6 +260,8 @@ Before presenting to CFO:
 - [ ] Validate cost per appeal includes staff time and overhead
 - [ ] Ensure CDIL annual cost includes licensing, training, integration
 - [ ] Run "reasonableness test": Does ROI exceed 3:1 in conservative scenario?
+- [ ] Finance team has reviewed and approved all assumptions
+- [ ] Sensitivity analysis shows acceptable range of outcomes
 
 ---
 
