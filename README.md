@@ -1,7 +1,7 @@
 
 ---
 
-# ELI Sentinel — Clinical AI Documentation Integrity Layer
+# ELI Sentinel – Clinical AI Documentation Integrity Layer
 
 ## Cryptographically Verifiable Governance for AI-Generated Clinical Notes
 
@@ -253,4 +253,4 @@ uvicorn gateway.app.main:app --reload
 
 ---
 
-**ELI Sentinel — Making AI clinical documentation auditably defensible.**
+**ELI Sentinel – Making AI clinical documentation auditably defensible.**

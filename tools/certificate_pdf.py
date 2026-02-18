@@ -22,10 +22,9 @@ try:
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_LEFT
-    import qrcode
 except ImportError:
     print("❌ Error: Required packages not installed.")
-    print("Please install: pip install reportlab qrcode pillow")
+    print("Please install: pip install reportlab pillow")
     sys.exit(1)
 
 
@@ -41,23 +40,6 @@ def load_certificate(filepath: str) -> dict:
         print(f"❌ Error: Invalid JSON in certificate file: {e}")
         sys.exit(1)
 
-
-def generate_qr_code(data: str, box_size: int = 10) -> io.BytesIO:
-    """Generate QR code as BytesIO object."""
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=box_size,
-        border=4,
-    )
-    qr.add_data(data)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-    return buffer
 
 
 def create_certificate_pdf(packet: dict, output_path: str):

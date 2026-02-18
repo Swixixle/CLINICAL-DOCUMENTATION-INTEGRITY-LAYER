@@ -27,7 +27,15 @@ OUTPUT_DIR = Path("/tmp/clinical_demo")
 
 def setup_output_dir():
     """Create output directory for demo artifacts."""
-    OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+    # Use /tmp if available, otherwise use current directory
+    global OUTPUT_DIR
+    try:
+        OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+    except (PermissionError, OSError):
+        # Fallback to current directory if /tmp is not writable
+        OUTPUT_DIR = Path.cwd() / "clinical_demo_output"
+        OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+    
     print(f"📁 Output directory: {OUTPUT_DIR}\n")
 
 
