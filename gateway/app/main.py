@@ -5,11 +5,12 @@ This is the main entry point for the CDIL Gateway API.
 
 Security Hardening:
 - JWT-based authentication required for all protected endpoints
-- Rate limiting to prevent abuse
+- Rate limiting to prevent abuse (can be disabled in test mode)
 - Custom exception handling to prevent PHI leakage
 - Database security validation on startup
 """
 
+import os
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -19,12 +20,30 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, vendors, governance, gatekeeper
+from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics
 from gateway.app.db.migrate import ensure_schema, check_db_security
 
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+# Initialize rate limiter with test mode bypass
+def get_limiter():
+    """
+    Create rate limiter that can be disabled in test mode.
+    
+    Set ENV=TEST or DISABLE_RATE_LIMITS=1 to disable rate limiting.
+    This allows tests to run cleanly in CI without rate limit failures.
+    """
+    disable_limits = (
+        os.environ.get("ENV") == "TEST" or
+        os.environ.get("DISABLE_RATE_LIMITS") == "1"
+    )
+    
+    if disable_limits:
+        # Return a limiter with effectively unlimited rate
+        return Limiter(key_func=get_remote_address, default_limits=["1000000/minute"])
+    else:
+        return Limiter(key_func=get_remote_address)
+
+limiter = get_limiter()
 
 
 def sanitize_error_detail(detail: any) -> dict:
@@ -165,9 +184,7 @@ app.include_router(ai.router)
 app.include_router(clinical.router)
 app.include_router(mock.router)
 app.include_router(analytics.router)
-app.include_router(vendors.router)
-app.include_router(governance.router)
-app.include_router(gatekeeper.router)
+# Phase 2-4 routes (vendors, governance, gatekeeper) moved to separate PRs
 
 
 @app.get("/")

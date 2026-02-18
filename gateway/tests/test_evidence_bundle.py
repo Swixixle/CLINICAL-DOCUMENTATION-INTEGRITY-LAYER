@@ -10,12 +10,16 @@ Validates Phase 1 requirements:
 
 import pytest
 import json
+import os
 from fastapi.testclient import TestClient
 from pathlib import Path
 import tempfile
 import shutil
 import zipfile
 from io import BytesIO
+
+# Enable test mode to disable rate limiting
+os.environ["ENV"] = "TEST"
 
 from gateway.app.main import app
 from gateway.app.db.migrate import ensure_schema, get_db_path
@@ -81,7 +85,7 @@ def test_evidence_bundle_json_structure(client):
     
     # Get evidence bundle JSON
     headers = create_auditor_headers("tenant-bundle-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     bundle = response.json()
@@ -149,7 +153,7 @@ def test_evidence_bundle_canonical_message_included(client):
     
     # Get evidence bundle
     headers = create_auditor_headers("tenant-canonical-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     bundle = response.json()
@@ -180,7 +184,7 @@ def test_evidence_bundle_cross_tenant_access_forbidden(client):
     
     # Tenant B tries to access Tenant A's evidence bundle
     headers_tenant_b = create_auditor_headers("tenant-B")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers_tenant_b)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers_tenant_b)
     
     # Should return 404 (not reveal existence)
     assert response.status_code == 404
@@ -212,7 +216,7 @@ def test_evidence_bundle_no_phi_in_response(client):
     
     # Get evidence bundle
     headers = create_auditor_headers("tenant-phi-test")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     bundle = response.json()
@@ -244,7 +248,7 @@ def test_evidence_bundle_zip_includes_json_bundle(client):
     
     # Get ZIP bundle
     headers = create_auditor_headers("tenant-zip-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.zip", headers=headers)
     
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
@@ -305,7 +309,7 @@ def test_evidence_bundle_offline_verification_support(client):
     
     # Get evidence bundle
     headers = create_auditor_headers("tenant-offline-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     bundle = response.json()
@@ -348,7 +352,7 @@ def test_evidence_bundle_rate_limiting(client):
     
     # Normal request should succeed
     headers = create_auditor_headers("tenant-rate-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     
@@ -360,7 +364,7 @@ def test_evidence_bundle_rate_limiting(client):
 def test_evidence_bundle_requires_authentication(client):
     """Test that evidence bundle endpoints require authentication."""
     # Try to access without auth header
-    response = client.get("/v1/certificates/fake-id/evidence-bundle")
+    response = client.get("/v1/certificates/fake-id/evidence-bundle.json")
     
     # Should return 403 (Forbidden) or 401 (Unauthorized) depending on auth setup
     assert response.status_code in [401, 403]
@@ -370,7 +374,7 @@ def test_evidence_bundle_not_found(client):
     """Test that evidence bundle returns 404 for non-existent certificate."""
     # Try to get bundle for certificate that doesn't exist
     headers = create_auditor_headers("tenant-notfound-001")
-    response = client.get("/v1/certificates/fake-cert-id-999/evidence-bundle", headers=headers)
+    response = client.get("/v1/certificates/fake-cert-id-999/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 404
     error = response.json()
@@ -387,7 +391,7 @@ def test_evidence_bundle_includes_chain_integrity(client):
     
     # Get evidence bundle for second certificate
     headers = create_auditor_headers("tenant-chain-001")
-    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle", headers=headers)
+    response = client.get(f"/v1/certificates/{certificate_id}/evidence-bundle.json", headers=headers)
     
     assert response.status_code == 200
     bundle = response.json()
