@@ -2,13 +2,20 @@
 Clinical documentation endpoints for CDIL.
 
 Handles certificate issuance and verification for AI-generated clinical notes.
+
+Security Model:
+- JWT authentication required (tenant_id from authenticated identity)
+- Role-based access control (clinician can issue, auditor can verify)
+- Rate limiting to prevent abuse
+- Per-tenant cryptographic keys
 """
 
-from fastapi import APIRouter, HTTPException, Header
-from typing import Dict, Any
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from typing import Dict, Any, Optional
+from fastapi.responses import Response
 from datetime import datetime, timezone
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from gateway.app.models.clinical import (
     ClinicalDocumentationRequest,
@@ -17,15 +24,20 @@ from gateway.app.models.clinical import (
     IntegrityChain,
     SignatureBundle
 )
+from gateway.app.security.auth import Identity, get_current_identity, require_role
 from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
 from gateway.app.services.verification_interpreter import interpret_verification
 from gateway.app.services.certificate_pdf import generate_certificate_pdf
 from gateway.app.services.evidence_bundle import generate_evidence_bundle
+from gateway.app.services.key_registry import get_key_registry
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
+
+# Rate limiter instance
+limiter = Limiter(key_func=get_remote_address)
 
 
 def get_tenant_chain_head(tenant_id: str) -> str | None:
@@ -71,6 +83,7 @@ def store_certificate(certificate: Dict[str, Any]) -> None:
     timestamp = certificate["timestamp"]
     note_hash = certificate["note_hash"]
     chain_hash = certificate["integrity_chain"]["chain_hash"]
+    key_id = certificate["signature"]["key_id"]
     
     # Serialize full certificate as JSON
     certificate_json = json.dumps(certificate, sort_keys=True)
@@ -88,15 +101,17 @@ def store_certificate(certificate: Dict[str, Any]) -> None:
                 timestamp,
                 note_hash,
                 chain_hash,
+                key_id,
                 certificate_json,
                 created_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             certificate_id,
             tenant_id,
             timestamp,
             note_hash,
             chain_hash,
+            key_id,
             certificate_json,
             created_at_utc
         ))
@@ -134,41 +149,51 @@ def compute_chain_hash(certificate_data: Dict[str, Any], previous_hash: str | No
 
 
 @router.post("/clinical/documentation", response_model=CertificateIssuanceResponse)
+@limiter.limit("30/minute")  # Rate limit: 30 certificate issuances per minute
 async def issue_certificate(
-    request: ClinicalDocumentationRequest,
-    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
+    request: Request,  # Required for rate limiting
+    req_body: ClinicalDocumentationRequest,
+    identity: Identity = Depends(require_role("clinician"))
 ) -> CertificateIssuanceResponse:
     """
     Issue an integrity certificate for finalized clinical documentation.
     
+    SECURITY: Requires JWT authentication with 'clinician' role.
+    Tenant ID is derived from authenticated identity, NOT from client input.
+    
     This endpoint is called when a clinical note is finalized and ready for
     commitment to the EHR. It:
     
-    1. Validates note_text for PHI patterns (rejects obvious PHI)
-    2. Hashes note content and PHI fields (never stores plaintext)
-    3. Retrieves tenant's chain head
-    4. Computes new chain hash
-    5. Signs the certificate
-    6. Stores the certificate
-    7. Returns certificate and verification URL
+    1. Authenticates caller and extracts tenant_id from JWT
+    2. Validates note_text for PHI patterns (rejects obvious PHI)
+    3. Hashes note content and PHI fields (never stores plaintext)
+    4. Retrieves tenant's chain head
+    5. Computes new chain hash
+    6. Signs the certificate with tenant-specific key
+    7. Stores the certificate
+    8. Returns certificate and verification URL
     
     Args:
-        request: Clinical documentation details
-        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
+        request: FastAPI request (for rate limiting)
+        req_body: Clinical documentation details
+        identity: Authenticated identity (injected by JWT dependency)
         
     Returns:
         Certificate issuance response with certificate_id and full certificate
         
     Raises:
         HTTPException: 400 if PHI patterns detected in note_text
+        HTTPException: 401 if not authenticated
+        HTTPException: 403 if insufficient permissions
+        HTTPException: 429 if rate limit exceeded
     """
-    # Use tenant_id from header
-    tenant_id = x_tenant_id
+    # Tenant ID comes from authenticated identity, NEVER from client
+    tenant_id = identity.tenant_id
     import re
     
     # Step 0: PHI Detection Guardrails - reject obvious PHI patterns
     # This protects against accidental PHI exposure in note_text
-    note_text = request.note_text
+    note_text = req_body.note_text
     
     phi_patterns = {
         "ssn": r'\b\d{3}-\d{2}-\d{4}\b',  # SSN: 123-45-6789
@@ -202,47 +227,48 @@ async def issue_certificate(
     note_hash = sha256_hex(note_text.encode('utf-8'))
     
     patient_hash = None
-    if request.patient_reference:
-        patient_hash = sha256_hex(request.patient_reference.encode('utf-8'))
+    if req_body.patient_reference:
+        patient_hash = sha256_hex(req_body.patient_reference.encode('utf-8'))
     
     reviewer_hash = None
-    if request.human_reviewer_id:
-        reviewer_hash = sha256_hex(request.human_reviewer_id.encode('utf-8'))
+    if req_body.human_reviewer_id:
+        reviewer_hash = sha256_hex(req_body.human_reviewer_id.encode('utf-8'))
     
     # Step 3: Compute policy hash and generate governance summary
-    policy_hash = sha256_hex(request.governance_policy_version.encode('utf-8'))
-    governance_summary = f"Governance policy {request.governance_policy_version} applied. Model: {request.model_version}. Human reviewed: {request.human_reviewed}."
+    policy_hash = sha256_hex(req_body.governance_policy_version.encode('utf-8'))
+    governance_summary = f"Governance policy {req_body.governance_policy_version} applied. Model: {req_body.model_version}. Human reviewed: {req_body.human_reviewed}."
     
-    # Step 3: Get tenant's current chain head
+    # Step 4: Get tenant's current chain head
     previous_hash = get_tenant_chain_head(tenant_id)
     
-    # Step 4: Build certificate data for chain hash computation
+    # Step 5: Build certificate data for chain hash computation
     certificate_data = {
         "certificate_id": certificate_id,
         "tenant_id": tenant_id,
         "timestamp": timestamp,
         "note_hash": note_hash,
-        "model_version": request.model_version,
-        "governance_policy_version": request.governance_policy_version
+        "model_version": req_body.model_version,
+        "governance_policy_version": req_body.governance_policy_version
     }
     
-    # Step 5: Compute chain hash
+    # Step 6: Compute chain hash
     chain_hash = compute_chain_hash(certificate_data, previous_hash)
     
-    # Step 6: Build canonical message for signing
+    # Step 7: Build canonical message for signing
     canonical_message = {
         "certificate_id": certificate_id,
         "tenant_id": tenant_id,
         "timestamp": timestamp,
         "chain_hash": chain_hash,
         "note_hash": note_hash,
-        "governance_policy_version": request.governance_policy_version
+        "governance_policy_version": req_body.governance_policy_version
     }
     
-    # Step 7: Sign the certificate
-    signature_bundle = sign_generic_message(canonical_message)
+    # Step 8: Sign the certificate with per-tenant key
+    # This uses tenant-specific keys for cryptographic isolation
+    signature_bundle = sign_generic_message(canonical_message, tenant_id=tenant_id)
     
-    # Step 8: Assemble complete certificate
+    # Step 9: Assemble complete certificate
     certificate_dict = {
         "certificate_id": certificate_id,
         "tenant_id": tenant_id,
@@ -250,16 +276,16 @@ async def issue_certificate(
         "finalized_at": finalized_at,
         "ehr_referenced_at": None,  # Can be set later
         "ehr_commit_id": None,  # Can be set later
-        "model_version": request.model_version,
-        "prompt_version": request.prompt_version,
-        "governance_policy_version": request.governance_policy_version,
+        "model_version": req_body.model_version,
+        "prompt_version": req_body.prompt_version,
+        "governance_policy_version": req_body.governance_policy_version,
         "policy_hash": policy_hash,
         "governance_summary": governance_summary,
         "note_hash": note_hash,
         "patient_hash": patient_hash,
         "reviewer_hash": reviewer_hash,
-        "encounter_id": request.encounter_id,
-        "human_reviewed": request.human_reviewed,
+        "encounter_id": req_body.encounter_id,
+        "human_reviewed": req_body.human_reviewed,
         "integrity_chain": {
             "previous_hash": previous_hash,
             "chain_hash": chain_hash
@@ -271,10 +297,10 @@ async def issue_certificate(
         }
     }
     
-    # Step 9: Store certificate
+    # Step 10: Store certificate
     store_certificate(certificate_dict)
     
-    # Step 10: Build response
+    # Step 11: Build response
     certificate = DocumentationIntegrityCertificate(**certificate_dict)
     
     return CertificateIssuanceResponse(
@@ -285,41 +311,36 @@ async def issue_certificate(
 
 
 @router.get("/certificates/{certificate_id}")
+@limiter.limit("100/minute")  # Rate limit: 100 certificate retrievals per minute
 async def get_certificate(
+    request: Request,  # Required for rate limiting
     certificate_id: str,
-    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+    identity: Identity = Depends(get_current_identity)
 ) -> DocumentationIntegrityCertificate:
     """
     Retrieve a certificate by its ID.
     
-    Requires X-Tenant-Id header for tenant isolation.
-    Returns the stored certificate with no plaintext PHI.
+    SECURITY: Requires JWT authentication.
     Enforces tenant isolation - returns 404 if certificate belongs to different tenant.
+    Returns the stored certificate with no plaintext PHI.
     
     Args:
+        request: FastAPI request (for rate limiting)
         certificate_id: Certificate identifier
-        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
-        x_tenant_id: Tenant ID from X-Tenant-Id header
+        identity: Authenticated identity (injected by JWT dependency)
         
     Returns:
         Complete certificate
         
     Raises:
+        HTTPException: 401 if not authenticated
         HTTPException: 404 if certificate not found or belongs to different tenant
-        HTTPException: 400 if X-Tenant-Id header missing
-        HTTPException: 404 if certificate not found or tenant mismatch
     """
-    if not x_tenant_id:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "missing_tenant_id",
-                "message": "X-Tenant-Id header is required"
-            }
-        )
     import json
     from gateway.app.db.migrate import get_connection
+    
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
     
     conn = get_connection()
     try:
@@ -332,23 +353,13 @@ async def get_certificate(
         
         # Return 404 if not found (don't reveal existence)
         if not row:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         # Return 404 for cross-tenant access (don't reveal existence to other tenants)
-        if row['tenant_id'] != x_tenant_id:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        if row['tenant_id'] != tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         certificate_dict = json.loads(row['certificate_json'])
-        
-        # Enforce tenant isolation
-        if certificate_dict.get("tenant_id") != x_tenant_id:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "tenant_mismatch",
-                    "message": "Certificate not found"  # Don't reveal existence to other tenants
-                }
-            )
         
         return DocumentationIntegrityCertificate(**certificate_dict)
     finally:
@@ -356,14 +367,16 @@ async def get_certificate(
 
 
 @router.post("/certificates/{certificate_id}/verify")
+@limiter.limit("100/minute")  # Rate limit: 100 verifications per minute
 async def verify_certificate(
+    request: Request,  # Required for rate limiting
     certificate_id: str,
-    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+    identity: Identity = Depends(require_role("auditor"))
 ) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a certificate.
     
+    SECURITY: Requires JWT authentication with 'auditor' role.
     Enforces tenant isolation - returns 404 if certificate belongs to different tenant.
     
     Verifies:

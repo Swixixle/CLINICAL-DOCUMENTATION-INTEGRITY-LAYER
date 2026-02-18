@@ -2,8 +2,13 @@
 Cryptographic signing and verification for CDIL.
 
 This module provides signing capabilities for certificates and accountability packets.
-In development, it uses local keys. In production, it can be extended
-to use AWS KMS, GCP KMS, Azure Key Vault, or HSMs.
+Uses per-tenant keys with nonce-based replay protection.
+
+Security Updates (Hardening):
+- Per-tenant key isolation (no shared keys across tenants)
+- Nonce-based replay protection
+- Server-controlled timestamps (client cannot forge)
+- Key rotation support via key_id tracking
 
 Signature Format:
 - Algorithm: ECDSA with SHA-256 (P-256 curve)
@@ -16,17 +21,22 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
-
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
 
 from gateway.app.services.c14n import json_c14n_v1
 from gateway.app.services.hashing import sha256_hex
+from gateway.app.services.key_registry import get_key_registry
+from gateway.app.db.migrate import get_connection
 
 
 def _load_private_key():
-    """Load the dev private key."""
+    """
+    Load the dev private key (fallback for legacy operations).
+    
+    DEPRECATED: Use per-tenant keys from key_registry instead.
+    """
     key_path = Path(__file__).parent.parent / "dev_keys" / "dev_private.pem"
     
     with open(key_path, 'rb') as f:
@@ -39,7 +49,11 @@ def _load_private_key():
 
 
 def _load_public_jwk():
-    """Load the dev public key JWK."""
+    """
+    Load the dev public key JWK (fallback for legacy operations).
+    
+    DEPRECATED: Use per-tenant keys from key_registry instead.
+    """
     jwk_path = Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
     
     with open(jwk_path, 'r') as f:
@@ -70,9 +84,47 @@ def _jwk_to_public_key(jwk: Dict[str, str]):
     return public_numbers.public_key()
 
 
+def check_and_record_nonce(tenant_id: str, nonce: str) -> bool:
+    """
+    Check if nonce has been used and record it if not.
+    
+    This prevents replay attacks by ensuring each nonce is used only once per tenant.
+    
+    Args:
+        tenant_id: Tenant identifier
+        nonce: Nonce string (should be UUID4)
+        
+    Returns:
+        True if nonce is new (recorded successfully), False if already used
+    """
+    conn = get_connection()
+    try:
+        # Check if nonce exists
+        cursor = conn.execute("""
+            SELECT 1 FROM used_nonces
+            WHERE tenant_id = ? AND nonce = ?
+        """, (tenant_id, nonce))
+        
+        if cursor.fetchone():
+            return False  # Nonce already used (replay attack!)
+        
+        # Record the nonce
+        used_at_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        conn.execute("""
+            INSERT INTO used_nonces (tenant_id, nonce, used_at_utc)
+            VALUES (?, ?, ?)
+        """, (tenant_id, nonce, used_at_utc))
+        conn.commit()
+        
+        return True
+        
+    finally:
+        conn.close()
+
+
 def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Sign a message object using the dev private key.
+    Sign a message object using the dev private key (legacy format).
     
     The canonical message contract is locked to exactly 4 fields:
     - transaction_id
@@ -129,51 +181,71 @@ def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def sign_generic_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
+def sign_generic_message(
+    message_obj: Dict[str, Any],
+    tenant_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Sign an arbitrary message object using the dev private key.
+    Sign an arbitrary message object using per-tenant keys.
     
-    This is used for signing messages that don't follow the legacy
-    transaction canonical format (e.g., certificates).
+    This is the primary signing function for certificates and should be used
+    for all new code. It includes:
+    - Per-tenant key isolation
+    - Nonce for replay protection (if tenant_id provided)
+    - Server timestamp
+    - Key rotation support
     
     Args:
         message_obj: Dictionary to sign (will be canonicalized)
+        tenant_id: Tenant ID for per-tenant signing (optional, uses dev key if None)
         
     Returns:
         Dictionary containing:
             - algorithm: Algorithm identifier
             - key_id: Key identifier
-            - canonical_message: Original message object
+            - canonical_message: Original message object (with nonce/timestamp if tenant_id)
             - signature: Base64-encoded signature
     """
-    
-    return sign_generic_message(message_obj)
-
-
-def sign_generic_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Sign an arbitrary message object using the dev private key.
-    
-    This is used for signing messages that don't follow the legacy
-    transaction canonical format (e.g., certificates).
-    
-    Args:
-        message_obj: Dictionary to sign (will be canonicalized)
+    # If no tenant_id, use legacy dev key
+    if not tenant_id:
+        # Legacy path for backward compatibility
+        canonical_bytes = json_c14n_v1(message_obj)
+        private_key = _load_private_key()
+        signature = private_key.sign(
+            canonical_bytes,
+            ec.ECDSA(hashes.SHA256())
+        )
+        signature_b64 = base64.b64encode(signature).decode('utf-8')
         
-    Returns:
-        Dictionary containing:
-            - algorithm: Algorithm identifier
-            - key_id: Key identifier
-            - canonical_message: Original message object
-            - signature: Base64-encoded signature
-    """
-    # Canonicalize the message
-    canonical_bytes = json_c14n_v1(message_obj)
+        return {
+            "algorithm": "ECDSA_SHA_256",
+            "key_id": "dev-key-01",
+            "canonical_message": message_obj,
+            "signature": signature_b64
+        }
     
-    # Load private key
-    private_key = _load_private_key()
+    # Get tenant's active key
+    registry = get_key_registry()
+    key_data = registry.get_active_key(tenant_id)
     
-    # Sign the canonical bytes
+    if not key_data:
+        # Generate key for tenant if none exists
+        key_id = registry.ensure_tenant_has_key(tenant_id)
+        key_data = registry.get_active_key(tenant_id)
+    
+    # Add nonce and timestamp for replay protection
+    from gateway.app.services.uuid7 import generate_uuid7
+    enhanced_message = {
+        **message_obj,
+        "nonce": generate_uuid7(),
+        "server_timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    }
+    
+    # Canonicalize the enhanced message
+    canonical_bytes = json_c14n_v1(enhanced_message)
+    
+    # Sign with tenant's key
+    private_key = key_data['private_key']
     signature = private_key.sign(
         canonical_bytes,
         ec.ECDSA(hashes.SHA256())
@@ -182,10 +254,15 @@ def sign_generic_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
     # Encode signature as base64
     signature_b64 = base64.b64encode(signature).decode('utf-8')
     
+    # Record nonce to prevent replay
+    nonce = enhanced_message["nonce"]
+    if not check_and_record_nonce(tenant_id, nonce):
+        raise ValueError(f"Nonce already used: {nonce} (replay attack detected)")
+    
     return {
         "algorithm": "ECDSA_SHA_256",
-        "key_id": "dev-key-01",
-        "canonical_message": message_obj,
+        "key_id": key_data['key_id'],
+        "canonical_message": enhanced_message,
         "signature": signature_b64
     }
 
@@ -231,3 +308,7 @@ def verify_signature(bundle: Dict[str, Any], jwk: Dict[str, str]) -> bool:
         
     except (InvalidSignature, ValueError, KeyError):
         return False
+
+
+# Type hint fix
+from typing import Optional
