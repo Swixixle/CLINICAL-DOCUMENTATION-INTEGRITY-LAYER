@@ -7,7 +7,7 @@ This is the main entry point for the ELI Sentinel Gateway API.
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from gateway.app.routes import health, keys, transactions, ai
+from gateway.app.routes import health, keys, transactions, ai, clinical, mock
 from gateway.app.db.migrate import ensure_schema
 
 
@@ -45,6 +45,8 @@ app.include_router(health.router)
 app.include_router(keys.router)
 app.include_router(transactions.router)
 app.include_router(ai.router)
+app.include_router(clinical.router)
+app.include_router(mock.router)
 
 
 @app.get("/")
