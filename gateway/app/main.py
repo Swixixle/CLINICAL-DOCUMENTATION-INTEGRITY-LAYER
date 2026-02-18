@@ -19,7 +19,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics
+from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, vendors, governance, gatekeeper
 from gateway.app.db.migrate import ensure_schema, check_db_security
 
 
@@ -165,6 +165,9 @@ app.include_router(ai.router)
 app.include_router(clinical.router)
 app.include_router(mock.router)
 app.include_router(analytics.router)
+app.include_router(vendors.router)
+app.include_router(governance.router)
+app.include_router(gatekeeper.router)
 
 
 @app.get("/")

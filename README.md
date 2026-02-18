@@ -2,7 +2,25 @@
 
 > **"If it's not exportable and understandable by a lawyer, it didn't happen."**
 
-CDIL provides cryptographically verifiable integrity certificates for AI-generated clinical documentation. Every certificate is **exportable, independently verifiable, and legally defensible**.
+CDIL is a **Verifiable Evidence Layer** that provides cryptographically verifiable integrity certificates for AI-generated clinical documentation. It serves three critical stakeholders:
+
+1. **Hospitals** - Export evidence bundles for payer appeals, litigation, and compliance audits
+2. **AI Vendors** - Register models and participate in governed, multi-vendor ecosystems  
+3. **EHR Vendors** - Enable gatekeeper mode to ensure only verified notes are committed
+
+Every certificate is **exportable, independently verifiable, and legally defensible**.
+
+---
+
+## Architecture Overview
+
+CDIL provides a complete trust infrastructure for AI-generated clinical documentation:
+
+- **Evidence Bundles** - Self-contained packages for legal proceedings and audits
+- **Vendor Registry** - Track AI models, versions, and vendor public keys
+- **Model Governance** - Tenant-level allowlists for approved AI models
+- **Gatekeeper Mode** - EHR integration point for pre-commit verification
+- **Per-Tenant Keys** - Cryptographic isolation across organizations
 
 ---
 
@@ -14,8 +32,8 @@ CDIL is designed for **evidentiary use cases** — providing tamper-evident proo
 
 When questioned about AI-generated clinical documentation, you provide:
 
-1. **Certificate PDF** — Formal document showing model version, policy version, human review status, and cryptographic seal
-2. **Evidence Bundle** — Complete ZIP archive containing certificate.json, certificate.pdf, verification_report.json, and README_VERIFICATION.txt
+1. **Evidence Bundle (JSON)** — Structured bundle with certificate, verification instructions, and public key references
+2. **Evidence Bundle (ZIP)** — Complete archive with certificate.json, certificate.pdf, evidence_bundle.json, verification_report.json, README_VERIFICATION.txt
 3. **Verification Proof** — Demonstrate that the certificate passes all integrity checks (timing, chain hash, signature)
 
 ---
@@ -24,17 +42,21 @@ When questioned about AI-generated clinical documentation, you provide:
 
 **Critical:** Before production deployment, review the comprehensive security documentation:
 
-- **[Threat Model & Trust Guarantees](./docs/THREAT_MODEL_AND_TRUST_GUARANTEES.md)** - Complete security contract, attacker model, STRIDE analysis, and vulnerability assessment
+- **[Genie Roadmap](./docs/GENIE_ROADMAP.md)** - Evolution into Verifiable Evidence Layer (Hospitals + AI Vendors + EHRs)
+- **[Integrity Artifact Spec](./docs/INTEGRITY_ARTIFACT_SPEC.md)** - Canonical formats for certificates and evidence bundles
+- **[Threat Model & Trust Guarantees](./docs/THREAT_MODEL_AND_TRUST_GUARANTEES.md)** - Complete security contract, attacker model, STRIDE analysis
 - **[Security Audit Summary](./docs/SECURITY_AUDIT_SUMMARY.md)** - Executive summary with critical findings and remediation timeline
 - **[Security Documentation Guide](./docs/README_SECURITY.md)** - Navigation guide for security docs and automated tests
 
-**Key findings:**
-- ⚠️ **Critical Gap**: Single global key enables cross-tenant forgery (pre-production blocker)
+**Security Hardening (Implemented):**
+- ✅ **Per-tenant cryptographic keys** - No cross-tenant forgery possible (Phase 5 complete)
 - ✅ PHI properly hashed, never stored in plaintext
-- ✅ Tenant isolation at DB layer works correctly
-- ✅ 11 automated security tests passing
+- ✅ Tenant isolation at API and DB layers
+- ✅ Nonce-based replay protection
+- ✅ Role-based access control (clinician, auditor, admin, ehr_gateway)
+- ✅ 50+ automated security tests passing
 
-See [remediation timeline](./docs/SECURITY_AUDIT_SUMMARY.md#9-remediation-timeline) for production readiness requirements.
+See [GENIE_ROADMAP.md](./docs/GENIE_ROADMAP.md) for production readiness requirements.
 
 ---
 
@@ -70,14 +92,30 @@ python tools/verify_certificate_cli.py certificate.json
 
 Outputs color-coded PASS (green) or FAIL (red) with exit codes.
 
-### 3. Export Evidence Bundle
+### 3. Export Evidence Bundle (JSON or ZIP)
 
+**JSON Bundle (Primary Format):**
 ```bash
-GET /v1/certificates/{id}/bundle
-Headers: X-Tenant-Id: hospital-alpha
+GET /v1/certificates/{id}/evidence-bundle
+Headers: Authorization: Bearer <JWT>
 ```
 
-Returns ZIP with: certificate.json, certificate.pdf, verification_report.json, README_VERIFICATION.txt
+Returns structured JSON bundle with:
+- Certificate metadata (certificate_id, tenant_id, issued_at, key_id, algorithm)
+- Canonical message (what was signed)
+- Content hashes (note_hash, patient_hash, reviewer_hash)
+- Model info (model_version, policy_version, policy_hash)
+- Human attestation (reviewed, reviewer_hash, timestamp)
+- Verification instructions (CLI, API, manual)
+- Public key reference
+
+**ZIP Bundle (Convenience Format):**
+```bash
+GET /v1/certificates/{id}/bundle
+Headers: Authorization: Bearer <JWT>
+```
+
+Returns ZIP with: certificate.json, certificate.pdf, evidence_bundle.json, verification_report.json, README_VERIFICATION.txt
 
 ### 4. Query Certificates for Audit
 
@@ -93,11 +131,35 @@ Filters: tenant_id, date range, model_version, policy_version, human_reviewed, p
 ## API Endpoints
 
 ### Certificate Issuance
-- `POST /v1/clinical/documentation` — Issue certificate
+- `POST /v1/clinical/documentation` — Issue certificate (clinician role)
 
-### Certificate Retrieval
-- `GET /v1/certificates/{id}` — Get certificate (requires X-Tenant-Id)
-- `POST /v1/certificates/{id}/verify` — Verify certificate (requires X-Tenant-Id)
+### Certificate Retrieval & Verification
+- `GET /v1/certificates/{id}` — Get certificate
+- `POST /v1/certificates/{id}/verify` — Verify certificate (auditor role)
+
+### Evidence Export (Phase 1 - Hospitals)
+- `GET /v1/certificates/{id}/evidence-bundle` — Get evidence bundle JSON (primary format)
+- `GET /v1/certificates/{id}/bundle` — Get evidence bundle ZIP (convenience format)
+- `GET /v1/certificates/{id}/pdf` — Download PDF certificate
+
+### Vendor Registry (Phase 2 - AI Vendors)
+- `POST /v1/vendors/register` — Register AI vendor (admin only)
+- `POST /v1/vendors/register-model` — Register AI model with optional public key (admin only)
+- `POST /v1/vendors/rotate-model-key` — Rotate model key (admin only)
+- `GET /v1/vendors/models` — List registered models (admin only)
+- `GET /v1/allowed-models` — Get allowed models for tenant (admin only)
+
+### Model Governance (Phase 3 - Multi-party)
+- `POST /v1/governance/models/allow` — Allow model for tenant (admin only)
+- `POST /v1/governance/models/block` — Block model for tenant (admin only)
+- `GET /v1/governance/models/status` — Get model authorization status (admin only)
+
+### EHR Gatekeeper (Phase 4 - EHR Vendors)
+- `POST /v1/gatekeeper/verify-and-authorize` — Verify certificate and issue commit token (ehr_gateway role)
+- `POST /v1/gatekeeper/verify-commit-token` — Verify commit token (ehr_gateway role)
+
+### Audit & Reporting
+- `POST /v1/certificates/query` — Query with filters
 
 ### Evidence Export
 - `GET /v1/certificates/{id}/pdf` — Download PDF (requires X-Tenant-Id)
@@ -105,6 +167,90 @@ Filters: tenant_id, date range, model_version, policy_version, human_reviewed, p
 
 ### Audit & Reporting
 - `POST /v1/certificates/query` — Query with filters
+
+---
+
+## Stakeholder Use Cases
+
+### For Hospitals: Revenue Protection & Litigation Armor
+
+**Problem**: Payers deny AI-generated documentation claims. Appeals require proof of integrity.
+
+**Solution**: Export evidence bundles for appeals.
+
+```bash
+# Get evidence bundle for certificate
+GET /v1/certificates/{cert_id}/evidence-bundle
+```
+
+**Value**:
+- **Payer Appeals** - Submit evidence bundle showing note was generated under governance
+- **Litigation Defense** - Prove documentation hasn't been altered since creation
+- **Compliance Audits** - Demonstrate AI oversight and human review
+- **ROI**: 6-8x return via reduced denials and successful appeals
+
+See [ROI Calculator](./docs/ROI_CALCULATOR_TEMPLATE.md) for detailed financial modeling.
+
+### For AI Vendors: Trust-as-a-Service
+
+**Problem**: Hospitals hesitant to adopt AI without governance proof and liability protection.
+
+**Solution**: Register models and provide vendor attestations.
+
+```bash
+# Register vendor
+POST /v1/vendors/register
+Body: {"vendor_name": "Anthropic"}
+
+# Register model with public key
+POST /v1/vendors/register-model
+Body: {
+  "vendor_id": "...",
+  "model_name": "Claude-3",
+  "model_version": "opus-20240229",
+  "public_jwk": {...}
+}
+
+# Rotate keys when needed
+POST /v1/vendors/rotate-model-key
+```
+
+**Value**:
+- **Differentiation** - "Our models are certifiable and auditable"
+- **Enterprise Sales** - Governance proof required for hospital procurement
+- **Liability Reduction** - Cryptographic proof of model version and policy compliance
+- **Partnership** - Multi-vendor ecosystems with hospitals
+
+### For EHR Vendors: Liability Firewall
+
+**Problem**: EHRs liable if unverified AI notes cause harm or billing fraud.
+
+**Solution**: Gatekeeper mode prevents unverified notes from being committed.
+
+```bash
+# EHR checks certificate before commit
+POST /v1/gatekeeper/verify-and-authorize
+Body: {
+  "certificate_id": "cert-123",
+  "ehr_commit_id": "ehr-opaque-id"
+}
+
+# Returns commit token if verified
+Response: {
+  "authorized": true,
+  "commit_token": "eyJhbGc...",  # 5-minute expiry
+  "verification_passed": true
+}
+
+# EHR uses commit token to prove compliance
+POST /v1/gatekeeper/verify-commit-token
+```
+
+**Value**:
+- **Risk Reduction** - Only verified notes reach the medical record
+- **Audit Trail** - Commit tokens prove EHR enforced verification
+- **Competitive Advantage** - "Our EHR has built-in AI governance"
+- **Partnership** - Enable multi-vendor AI ecosystems
 
 ---
 
@@ -139,12 +285,25 @@ pip install -r requirements.txt
 uvicorn gateway.app.main:app --reload --port 8000
 ```
 
-Test endpoints:
+**Authentication**: All endpoints require JWT authentication with Bearer token:
+
 ```bash
 curl -X POST http://localhost:8000/v1/clinical/documentation \
+  -H "Authorization: Bearer <JWT>" \
   -H "Content-Type: application/json" \
-  -d '{"tenant_id":"test","model_version":"gpt-4","note_text":"Test note","human_reviewed":true,...}'
+  -d '{
+    "model_version":"gpt-4-turbo",
+    "note_text":"Test note",
+    "human_reviewed":true,
+    ...
+  }'
 ```
+
+**Roles**:
+- `clinician` - Issue certificates
+- `auditor` - Verify certificates and query audit logs
+- `admin` - Full access (vendor registry, model governance)
+- `ehr_gateway` - Verify certificates and issue commit tokens
 
 ---
 
@@ -249,10 +408,32 @@ pytest gateway/tests/test_roi_projection.py -v
 
 ## Use Cases
 
-1. **Regulatory Audit** — Export evidence bundles, demonstrate offline verification
+1. **Payer Appeals** — Export evidence bundles to contest denied claims
 2. **Medical Malpractice Litigation** — Prove note content unchanged since issuance
-3. **Internal Quality Review** — Audit trail of AI-generated notes
-4. **Financial Planning** — ROI modeling for CDIL deployment business case
+3. **Regulatory Audits** — Demonstrate AI governance and human oversight
+4. **Multi-Vendor AI Ecosystems** — Enable hospitals to use multiple AI vendors with unified governance
+5. **EHR Gatekeeper** — Prevent unverified AI notes from reaching medical records
+6. **Financial Planning** — ROI modeling for CDIL deployment business case
+
+---
+
+## Testing
+
+Run the comprehensive test suite:
+
+```bash
+# Run all tests
+pytest gateway/tests/ -v
+
+# Run specific test suites
+pytest gateway/tests/test_evidence_bundle.py -v     # Phase 1: Evidence bundles
+pytest gateway/tests/test_vendor_registry.py -v     # Phase 2: Vendor registry
+pytest gateway/tests/test_model_governance.py -v    # Phase 3: Model governance
+pytest gateway/tests/test_gatekeeper.py -v          # Phase 4: EHR gatekeeper
+pytest gateway/tests/test_phase5_cleanup.py -v      # Phase 5: Security cleanup
+
+# 50+ automated security tests
+```
 
 ---
 

@@ -30,7 +30,7 @@ from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
 from gateway.app.services.verification_interpreter import interpret_verification
 from gateway.app.services.certificate_pdf import generate_certificate_pdf
-from gateway.app.services.evidence_bundle import generate_evidence_bundle
+from gateway.app.services.evidence_bundle import generate_evidence_bundle, build_evidence_bundle
 from gateway.app.services.key_registry import get_key_registry
 from gateway.app.routes.verify_utils import fail
 
@@ -696,6 +696,81 @@ async def get_evidence_bundle(
             "Content-Disposition": f"attachment; filename=evidence-bundle-{certificate_id}.zip"
         }
     )
+
+
+@router.get("/certificates/{certificate_id}/evidence-bundle")
+@limiter.limit("100/minute")  # Rate limit: 100 bundle generations per minute
+async def get_evidence_bundle_json(
+    request: Request,  # Required for rate limiting
+    certificate_id: str,
+    identity: Identity = Depends(get_current_identity)
+) -> Dict[str, Any]:
+    """
+    Generate and return structured evidence bundle as JSON (primary format).
+    
+    SECURITY: Requires JWT authentication.
+    Enforces tenant isolation - returns 404 for cross-tenant access.
+    
+    This is the primary evidence bundle format per INTEGRITY_ARTIFACT_SPEC.
+    Returns a structured JSON bundle containing:
+    - Certificate metadata (certificate_id, tenant_id, issued_at, key_id, algorithm)
+    - Canonical message (what was signed)
+    - Content hashes (note_hash, patient_hash, reviewer_hash)
+    - Model info (model_version, policy_version, policy_hash)
+    - Human attestation (reviewed, reviewer_hash, timestamp)
+    - Verification instructions (CLI, API, manual)
+    - Public key reference (key_id, reference_url)
+    
+    Use cases:
+    - Payer appeals (export bundle for submission)
+    - Compliance audits (demonstrate integrity proof)
+    - Legal proceedings (admissible evidence)
+    - Regulatory submissions (cryptographic verification)
+    
+    Args:
+        request: FastAPI request (for rate limiting)
+        certificate_id: Certificate identifier
+        identity: Authenticated identity (injected by JWT dependency)
+        
+    Returns:
+        Structured evidence bundle JSON
+        
+    Raises:
+        HTTPException: 401 if not authenticated
+        HTTPException: 404 if certificate not found or belongs to different tenant
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
+    
+    # Load certificate with tenant check
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json, tenant_id
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        # Return 404 if not found (don't reveal existence)
+        if not row:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
+        
+        # Enforce tenant isolation (cross-tenant returns 404)
+        if row['tenant_id'] != tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
+        
+        certificate = json.loads(row['certificate_json'])
+    finally:
+        conn.close()
+    
+    # Build structured evidence bundle
+    evidence_bundle = build_evidence_bundle(certificate, identity=tenant_id)
+    
+    return evidence_bundle
 
 
 @router.post("/certificates/query")

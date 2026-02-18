@@ -48,3 +48,8 @@ def create_auditor_headers(tenant_id: str, sub: str = None) -> dict:
 def create_admin_headers(tenant_id: str, sub: str = None) -> dict:
     """Create headers for admin role (full access)."""
     return create_jwt_headers(tenant_id, role="admin", sub=sub)
+
+
+def create_ehr_gateway_headers(tenant_id: str, sub: str = None) -> dict:
+    """Create headers for ehr_gateway role (can verify and issue commit tokens)."""
+    return create_jwt_headers(tenant_id, role="ehr_gateway", sub=sub)

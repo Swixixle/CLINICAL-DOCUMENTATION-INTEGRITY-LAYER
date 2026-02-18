@@ -77,3 +77,77 @@ CREATE TABLE IF NOT EXISTS used_nonces (
 
 -- Index for nonce cleanup (to purge old nonces)
 CREATE INDEX IF NOT EXISTS idx_used_nonces_used_at ON used_nonces(used_at_utc);
+
+-- ============================================================================
+-- Phase 2: Multi-Model Governance + Attribution
+-- ============================================================================
+
+-- AI Vendors table
+-- Stores registered AI vendors who provide models
+CREATE TABLE IF NOT EXISTS ai_vendors (
+    vendor_id TEXT PRIMARY KEY,
+    vendor_name TEXT NOT NULL,
+    status TEXT NOT NULL,  -- 'active' or 'inactive'
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL
+);
+
+-- Index for active vendors
+CREATE INDEX IF NOT EXISTS idx_ai_vendors_status ON ai_vendors(status);
+
+-- AI Models table
+-- Stores registered AI models with metadata
+CREATE TABLE IF NOT EXISTS ai_models (
+    model_id TEXT PRIMARY KEY,
+    vendor_id TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    status TEXT NOT NULL,  -- 'active', 'deprecated', or 'blocked'
+    metadata_json TEXT,  -- Additional model metadata (capabilities, disclaimers, etc)
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    FOREIGN KEY (vendor_id) REFERENCES ai_vendors(vendor_id)
+);
+
+-- Indexes for model queries
+CREATE INDEX IF NOT EXISTS idx_ai_models_vendor ON ai_models(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_ai_models_status ON ai_models(status);
+CREATE INDEX IF NOT EXISTS idx_ai_models_name_version ON ai_models(model_name, model_version);
+
+-- Vendor Model Keys table
+-- Stores public keys for vendor model attestations
+CREATE TABLE IF NOT EXISTS vendor_model_keys (
+    key_id TEXT PRIMARY KEY,
+    model_id TEXT NOT NULL,
+    public_jwk_json TEXT NOT NULL,
+    status TEXT NOT NULL,  -- 'active' or 'rotated'
+    created_at_utc TEXT NOT NULL,
+    rotated_at_utc TEXT,  -- Timestamp when key was rotated (if rotated)
+    FOREIGN KEY (model_id) REFERENCES ai_models(model_id)
+);
+
+-- Indexes for vendor key queries
+CREATE INDEX IF NOT EXISTS idx_vendor_model_keys_model ON vendor_model_keys(model_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_model_keys_status ON vendor_model_keys(model_id, status);
+
+-- ============================================================================
+-- Phase 3: Tenant-level Model Governance
+-- ============================================================================
+
+-- Tenant Allowed Models table
+-- Controls which AI models are approved for use by each tenant
+CREATE TABLE IF NOT EXISTS tenant_allowed_models (
+    tenant_id TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    status TEXT NOT NULL,  -- 'allowed' or 'blocked'
+    allowed_by TEXT,  -- Admin user who approved/blocked
+    allow_reason TEXT,  -- Reason for allowlist decision
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, model_id),
+    FOREIGN KEY (model_id) REFERENCES ai_models(model_id)
+);
+
+-- Indexes for tenant model authorization queries
+CREATE INDEX IF NOT EXISTS idx_tenant_allowed_models_tenant ON tenant_allowed_models(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_allowed_models_status ON tenant_allowed_models(tenant_id, status);
