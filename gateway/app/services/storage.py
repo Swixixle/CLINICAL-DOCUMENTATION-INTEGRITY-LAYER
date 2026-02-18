@@ -92,6 +92,35 @@ def get_transaction(transaction_id: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
+def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
+    """
+    Update a transaction packet in the database.
+    
+    This is primarily used for testing tampering scenarios.
+    
+    Args:
+        transaction_id: Transaction identifier
+        packet: Updated accountability packet dictionary
+    """
+    # Serialize packet
+    packet_json = json.dumps(packet, sort_keys=True)
+    
+    # Update indexed fields if they changed
+    final_hash = packet["halo_chain"]["final_hash"]
+    
+    conn = get_connection()
+    try:
+        conn.execute("""
+            UPDATE transactions
+            SET packet_json = ?,
+                final_hash = ?
+            WHERE transaction_id = ?
+        """, (packet_json, final_hash, transaction_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_keys() -> List[Dict[str, Any]]:
     """
     List all available keys.

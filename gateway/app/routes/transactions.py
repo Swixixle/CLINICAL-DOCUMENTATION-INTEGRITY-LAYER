@@ -31,16 +31,36 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
     Verify the cryptographic integrity of a transaction.
     
     Recomputes HALO chain and verifies signature.
-    Returns validation results.
+    Returns validation results with failures array.
     """
     # Load packet
     packet = get_transaction(transaction_id)
     if not packet:
         raise HTTPException(status_code=404, detail=f"Transaction not found: {transaction_id}")
     
+    failures = []
+    
     # Verify HALO chain
     halo_verification = verify_halo_chain(packet.get("halo_chain", {}))
     halo_valid = halo_verification.get("valid", False)
+    
+    if not halo_valid:
+        # Add HALO chain failures
+        discrepancies = halo_verification.get("discrepancies", [])
+        if discrepancies:
+            for discrepancy in discrepancies:
+                failures.append({
+                    "check": "halo_chain",
+                    "field": discrepancy.get("field"),
+                    "message": f"HALO chain mismatch at block {discrepancy.get('block_index')}: "
+                               f"{discrepancy.get('field')} expected {discrepancy.get('expected')}, "
+                               f"got {discrepancy.get('actual')}"
+                })
+        else:
+            failures.append({
+                "check": "halo_chain",
+                "message": "HALO chain verification failed"
+            })
     
     # Verify signature
     signature_bundle = packet.get("verification", {})
@@ -59,14 +79,30 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             jwk = key.get("jwk")
             if jwk:
                 signature_valid = verify_signature(signature_bundle, jwk)
+                if not signature_valid:
+                    failures.append({
+                        "check": "signature",
+                        "message": "Signature verification failed"
+                    })
+            else:
+                failures.append({
+                    "check": "signature",
+                    "message": "JWK not found in key record"
+                })
+        else:
+            failures.append({
+                "check": "key",
+                "message": f"Key not found: {key_id}"
+            })
+    else:
+        failures.append({
+            "check": "signature",
+            "message": "No key_id in signature bundle"
+        })
     
-    overall_valid = halo_valid and signature_valid and key_found
+    overall_valid = len(failures) == 0
     
     return {
         "valid": overall_valid,
-        "checks": {
-            "halo_chain": "valid" if halo_valid else "invalid",
-            "signature": "valid" if signature_valid else "invalid",
-            "key": "found" if key_found else "missing"
-        }
+        "failures": failures
     }
