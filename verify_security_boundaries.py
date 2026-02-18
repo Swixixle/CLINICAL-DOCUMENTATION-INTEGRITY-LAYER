@@ -87,7 +87,7 @@ def run_tests():
     
     try:
         result = subprocess.run(
-            ["python", "-m", "pytest", "gateway/tests/test_phase1_security.py", "-v", "--tb=short"],
+            [sys.executable, "-m", "pytest", "gateway/tests/test_phase1_security.py", "-v", "--tb=short"],
             cwd=BASE_DIR,
             capture_output=True,
             text=True

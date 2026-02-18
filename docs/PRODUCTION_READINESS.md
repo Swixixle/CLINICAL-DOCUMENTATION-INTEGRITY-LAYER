@@ -60,6 +60,8 @@
 - [ ] **JWT Secret Key**: Stored in AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager
   - Env var: `JWT_SECRET_KEY`
   - Current: Using `"dev-secret-key-change-in-production"` ⚠️
+  - **CRITICAL**: Dev secret is committed to git history and is COMPROMISED
+  - Production MUST use completely new secret (never use rotations of this value)
   - Length: Minimum 256 bits (32 bytes) for HS256
   - Rotation: Every 90 days with zero-downtime rotation
 
