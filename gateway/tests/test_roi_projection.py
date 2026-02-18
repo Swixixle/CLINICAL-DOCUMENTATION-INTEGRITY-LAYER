@@ -6,16 +6,19 @@ and the underlying ROI calculation logic.
 """
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from gateway.app.main import app
+from gateway.app.routes.analytics import router as analytics_router
 from gateway.app.services.roi import calculate_roi, RoiInputs
 
 
-# Test client without database (analytics endpoints are stateless)
+# Test client with minimal FastAPI app (analytics only, no DB init)
 @pytest.fixture
 def client():
-    """Test client for analytics endpoints (no database needed)."""
+    """Test client for analytics endpoints - truly isolated, no database."""
+    app = FastAPI()
+    app.include_router(analytics_router)
     return TestClient(app)
 
 
@@ -156,7 +159,8 @@ def test_roi_projection_rejects_negative_revenue(client, conservative_inputs):
     
     assert response.status_code == 422
     data = response.json()
-    assert "validation_error" in data["error"] or "error" in data
+    # FastAPI returns standard validation error with 'detail' key
+    assert "detail" in data
 
 
 def test_roi_projection_rejects_denial_rate_above_one(client, conservative_inputs):
