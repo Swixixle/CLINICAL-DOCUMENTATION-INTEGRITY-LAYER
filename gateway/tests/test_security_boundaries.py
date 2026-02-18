@@ -89,7 +89,7 @@ def test_cross_tenant_read_isolation(client):
     
     # Must return 404 (not 403) to avoid revealing existence
     assert get_response_b.status_code == 404
-    assert "not found" in get_response_b.json()["detail"]["message"].lower()
+    assert "not found" in get_response_b.json()["message"].lower()
 
 
 def test_cross_tenant_verify_isolation(client):
@@ -120,10 +120,10 @@ def test_cross_tenant_verify_isolation(client):
     assert verify_response_a.status_code == 200
     assert verify_response_a.json()["valid"] == True
     
-    # Attempt to verify tenant A's cert with tenant B's auth
+    # Attempt to verify tenant A's cert with tenant B's auth (auditor role)
     verify_response_b = client.post(
         f"/v1/certificates/{cert_a_id}/verify",
-        headers=create_clinician_headers("tenant-clinic-delta")
+        headers=create_auditor_headers("tenant-clinic-delta")
     )
     
     # Must return 404 to avoid revealing existence
@@ -132,10 +132,10 @@ def test_cross_tenant_verify_isolation(client):
 
 def test_missing_tenant_header_rejected(client):
     """
-    Test that requests without X-Tenant-Id header are rejected.
+    Test that requests without JWT authentication are rejected.
     
     Security requirement: All retrieval/verification endpoints must
-    require tenant context.
+    require authentication (JWT with tenant_id).
     """
     # Issue certificate first
     request_data = {
@@ -150,15 +150,13 @@ def test_missing_tenant_header_rejected(client):
     assert response.status_code == 200
     cert_id = response.json()["certificate_id"]
     
-    # Attempt to retrieve without X-Tenant-Id header
+    # Attempt to retrieve without authentication
     get_response = client.get(f"/v1/certificates/{cert_id}")
-    assert get_response.status_code == 400
-    assert "missing_tenant_id" in get_response.json()["detail"]["error"]
+    assert get_response.status_code == 401
     
-    # Attempt to verify without X-Tenant-Id header
+    # Attempt to verify without authentication
     verify_response = client.post(f"/v1/certificates/{cert_id}/verify")
-    assert verify_response.status_code == 400
-    assert "missing_tenant_id" in verify_response.json()["detail"]["error"]
+    assert verify_response.status_code == 401
 
 
 def test_phi_pattern_detection_ssn(client):
@@ -177,8 +175,8 @@ def test_phi_pattern_detection_ssn(client):
     
     response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
-    assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
-    assert "ssn" in response.json()["detail"]["detected_patterns"]
+    assert response.json()["error"] == "phi_detected_in_note_text"
+    assert "ssn" in response.json()["detected_patterns"]
 
 
 def test_phi_pattern_detection_phone(client):
@@ -197,8 +195,8 @@ def test_phi_pattern_detection_phone(client):
     
     response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
-    assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
-    assert "phone" in response.json()["detail"]["detected_patterns"]
+    assert response.json()["error"] == "phi_detected_in_note_text"
+    assert "phone" in response.json()["detected_patterns"]
 
 
 def test_phi_pattern_detection_email(client):
@@ -217,8 +215,8 @@ def test_phi_pattern_detection_email(client):
     
     response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
-    assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
-    assert "email" in response.json()["detail"]["detected_patterns"]
+    assert response.json()["error"] == "phi_detected_in_note_text"
+    assert "email" in response.json()["detected_patterns"]
 
 
 def test_note_text_never_persisted(client, test_db):
@@ -312,7 +310,7 @@ def test_chain_integrity_per_tenant(client):
         "human_reviewed": False
     }
     
-    response_a1 = client.post("/v1/clinical/documentation", json=request_a1)
+    response_a1 = client.post("/v1/clinical/documentation", json=request_a1, headers=create_clinician_headers("tenant-chain-alpha"))
     assert response_a1.status_code == 200
     cert_a1 = response_a1.json()["certificate"]
     
@@ -328,7 +326,7 @@ def test_chain_integrity_per_tenant(client):
         "human_reviewed": False
     }
     
-    response_b1 = client.post("/v1/clinical/documentation", json=request_b1)
+    response_b1 = client.post("/v1/clinical/documentation", json=request_b1, headers=create_clinician_headers("tenant-chain-beta"))
     assert response_b1.status_code == 200
     cert_b1 = response_b1.json()["certificate"]
     
@@ -344,7 +342,7 @@ def test_chain_integrity_per_tenant(client):
         "human_reviewed": False
     }
     
-    response_a2 = client.post("/v1/clinical/documentation", json=request_a2)
+    response_a2 = client.post("/v1/clinical/documentation", json=request_a2, headers=create_clinician_headers("tenant-chain-alpha"))
     assert response_a2.status_code == 200
     cert_a2 = response_a2.json()["certificate"]
     
@@ -369,14 +367,14 @@ def test_signature_verification_valid(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("tenant-sig-test"))
     assert response.status_code == 200
     cert_id = response.json()["certificate_id"]
     
-    # Verify certificate
+    # Verify certificate (same tenant, auditor role required)
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers=create_clinician_headers("tenant-sig-test")
+        headers=create_auditor_headers("tenant-sig-test")
     )
     
     assert verify_response.status_code == 200
@@ -402,7 +400,7 @@ def test_query_certificates_tenant_isolation(client):
         "human_reviewed": False
     }
     
-    response_a = client.post("/v1/clinical/documentation", json=request_a)
+    response_a = client.post("/v1/clinical/documentation", json=request_a, headers=create_clinician_headers("tenant-query-alpha"))
     assert response_a.status_code == 200
     cert_a_id = response_a.json()["certificate_id"]
     
@@ -415,14 +413,14 @@ def test_query_certificates_tenant_isolation(client):
         "human_reviewed": False
     }
     
-    response_b = client.post("/v1/clinical/documentation", json=request_b)
+    response_b = client.post("/v1/clinical/documentation", json=request_b, headers=create_clinician_headers("tenant-query-beta"))
     assert response_b.status_code == 200
     cert_b_id = response_b.json()["certificate_id"]
     
-    # Query as tenant A
+    # Query as tenant A (auditor role required)
     query_a = client.post(
         "/v1/certificates/query",
-        params={"tenant_id": "tenant-query-alpha"}
+        headers=create_auditor_headers("tenant-query-alpha")
     )
     assert query_a.status_code == 200
     results_a = query_a.json()
@@ -432,10 +430,10 @@ def test_query_certificates_tenant_isolation(client):
     assert results_a["certificates"][0]["certificate_id"] == cert_a_id
     assert all(c["tenant_id"] == "tenant-query-alpha" for c in results_a["certificates"])
     
-    # Query as tenant B
+    # Query as tenant B (auditor role required)
     query_b = client.post(
         "/v1/certificates/query",
-        params={"tenant_id": "tenant-query-beta"}
+        headers=create_auditor_headers("tenant-query-beta")
     )
     assert query_b.status_code == 200
     results_b = query_b.json()
