@@ -77,7 +77,6 @@ def test_debug_field_contains_no_full_exception_messages(client):
     # Tamper with packet to trigger recomputation failure
     from gateway.app.services.storage import get_transaction
     from gateway.app.db.migrate import get_connection
-    import json as json_lib
     
     packet = get_transaction(transaction_id)
     
@@ -86,7 +85,7 @@ def test_debug_field_contains_no_full_exception_messages(client):
     del packet["policy_receipt"]
     
     # Store the corrupted packet
-    packet_json = json_lib.dumps(packet, sort_keys=True)
+    packet_json = json.dumps(packet, sort_keys=True)
     conn = get_connection()
     try:
         conn.execute("""
@@ -155,7 +154,6 @@ def test_failure_schema_consistency(client):
     # Tamper with both HALO and signature to get multiple failure types
     from gateway.app.services.storage import get_transaction
     from gateway.app.db.migrate import get_connection
-    import json as json_lib
     
     packet = get_transaction(transaction_id)
     
@@ -166,7 +164,7 @@ def test_failure_schema_consistency(client):
     packet["verification"]["signature_b64"] = "dGFtcGVyZWQ="
     
     # Store tampered packet
-    packet_json = json_lib.dumps(packet, sort_keys=True)
+    packet_json = json.dumps(packet, sort_keys=True)
     conn = get_connection()
     try:
         conn.execute("""
@@ -228,7 +226,6 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
     # Get original packet to capture full hash
     from gateway.app.services.storage import get_transaction
     from gateway.app.db.migrate import get_connection
-    import json as json_lib
     
     packet = get_transaction(transaction_id)
     original_final_hash = packet["halo_chain"]["final_hash"]
@@ -239,7 +236,7 @@ def test_hash_prefixes_are_limited_to_16_chars(client):
     # Tamper with packet field to cause hash mismatch
     packet["policy_receipt"]["policy_change_ref"] = "TAMPERED"
     
-    packet_json = json_lib.dumps(packet, sort_keys=True)
+    packet_json = json.dumps(packet, sort_keys=True)
     conn = get_connection()
     try:
         conn.execute("""
