@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Decision Integrity Certificate Generator - ELI Sentinel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group select {
+            cursor: pointer;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            cursor: pointer;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .certificate-preview {
+            background: #f9f9f9;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .certificate-header {
+            text-align: center;
+            border: 3px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: white;
+        }
+
+        .certificate-header h3 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .certificate-header .subtitle {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .info-box p {
+            color: #0d47a1;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hash-preview {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #666;
+            background: #f5f5f5;
+            padding: 5px;
+            border-radius: 3px;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Clinical Decision Integrity Certificate Generator</h1>
+            <p>Demo - ELI Sentinel for Respiratory Care Workflows</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Input Form -->
+            <div class="panel">
+                <h2>Certificate Parameters</h2>
+                
+                <div class="info-box">
+                    <p><strong>Demo Mode:</strong> This generates a sample certificate. In production, certificates are created automatically by the ELI Sentinel Gateway when AI decisions execute.</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="decisionType">Clinical Decision Type</label>
+                    <select id="decisionType">
+                        <option value="sepsis-alert">Sepsis Prediction Alert</option>
+                        <option value="vent-weaning">Ventilator Weaning Recommendation</option>
+                        <option value="abg-interpretation">ABG Trend Interpretation</option>
+                        <option value="chart-summary">Clinical Documentation Summary</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelName">AI Model Name</label>
+                    <input type="text" id="modelName" value="sepsis-predictor-v2.1" placeholder="e.g., sepsis-predictor-v2.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="policyVersion">Policy Version</label>
+                    <input type="text" id="policyVersion" value="clinical-protocol-2024.1" placeholder="e.g., clinical-protocol-2024.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="environment">Environment</label>
+                    <select id="environment">
+                        <option value="prod">Production</option>
+                        <option value="staging">Staging</option>
+                        <option value="dev">Development</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="decisionSummary">Decision Summary</label>
+                    <textarea id="decisionSummary" placeholder="e.g., HIGH_RISK_ALERT - Sepsis criteria met, recommend bundle initiation">HIGH_RISK_ALERT - Sepsis criteria met, recommend bundle initiation</textarea>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="humanOverride">
+                    <label for="humanOverride">Human Override (clinician overrode AI recommendation)</label>
+                </div>
+
+                <div class="form-group">
+                    <label for="clinicianId">Clinician ID (Optional)</label>
+                    <input type="text" id="clinicianId" placeholder="e.g., RT-Smith-001">
+                </div>
+
+                <button class="btn" onclick="generateCertificate()">Generate Certificate</button>
+            </div>
+
+            <!-- Certificate Preview -->
+            <div class="panel">
+                <h2>Certificate Preview</h2>
+                
+                <div class="certificate-header">
+                    <h3>Clinical AI Decision Integrity Certificate</h3>
+                    <p class="subtitle">Cryptographically Verifiable Decision Record</p>
+                    <p class="subtitle">ELI Sentinel Gateway</p>
+                </div>
+
+                <div id="certificatePreview" class="certificate-preview">
+                    Click "Generate Certificate" to create a sample certificate...
+                </div>
+
+                <div class="actions">
+                    <button class="btn" onclick="downloadJSON()">Download JSON</button>
+                    <button class="btn btn-secondary" onclick="downloadPDF()">Download PDF (Placeholder)</button>
+                </div>
+
+                <div class="info-box" style="margin-top: 20px;">
+                    <p><strong>Verification:</strong> In production, certificates can be verified offline using: <code>python eli_verify.py certificate.json</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCertificate = null;
+
+        function generateHash(input) {
+            // Simple hash simulation for demo (not cryptographically secure)
+            let hash = 0;
+            for (let i = 0; i < input.length; i++) {
+                const char = input.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return 'sha256:' + Math.abs(hash).toString(16).padStart(64, '0').substring(0, 64);
+        }
+
+        function generateUUID7() {
+            // Simplified UUID7 generation for demo
+            const timestamp = Date.now();
+            const random = Math.random().toString(36).substring(2, 15);
+            return '01' + timestamp.toString(16).toUpperCase().padStart(12, '0') + random.toUpperCase().padStart(10, '0').substring(0, 10);
+        }
+
+        function generateCertificate() {
+            const timestamp = new Date().toISOString();
+            const certificateId = generateUUID7();
+            
+            const decisionType = document.getElementById('decisionType').value;
+            const modelName = document.getElementById('modelName').value;
+            const policyVersion = document.getElementById('policyVersion').value;
+            const environment = document.getElementById('environment').value;
+            const decisionSummary = document.getElementById('decisionSummary').value;
+            const humanOverride = document.getElementById('humanOverride').checked;
+            const clinicianId = document.getElementById('clinicianId').value || 'not-specified';
+
+            // Generate hashes
+            const modelHash = generateHash(modelName + timestamp);
+            const policyHash = generateHash(policyVersion + timestamp);
+            const inputHash = generateHash('patient-data-' + timestamp);
+            
+            // Build HALO chain (simplified)
+            const block1Hash = generateHash(certificateId + timestamp + environment);
+            const block2Hash = generateHash(block1Hash + decisionType);
+            const block3Hash = generateHash(block2Hash + inputHash);
+            const block4Hash = generateHash(block3Hash + policyHash + modelHash);
+            const block5Hash = generateHash(block4Hash + decisionSummary);
+            const finalHash = block5Hash;
+
+            // Generate signature (demo)
+            const signature = 'MEUCIQD' + Math.random().toString(36).substring(2, 50).toUpperCase();
+
+            currentCertificate = {
+                certificate_id: certificateId,
+                timestamp_utc: timestamp,
+                environment: environment,
+                client_id: 'demo-clinical-system',
+                
+                clinical_context: {
+                    decision_type: decisionType,
+                    feature_tag: decisionType,
+                    clinician_ref: clinicianId
+                },
+                
+                model_info: {
+                    model_name: modelName,
+                    model_fingerprint: modelName + '::' + modelHash.substring(0, 20) + '...',
+                    param_snapshot: {
+                        temperature: 0.0,
+                        environment: environment
+                    }
+                },
+                
+                policy_receipt: {
+                    policy_version: policyVersion,
+                    policy_version_hash: policyHash.substring(0, 20) + '...',
+                    policy_decision: 'approved',
+                    rules_applied: [
+                        'model_allowlist_check',
+                        'clinical_parameter_validation',
+                        'environment_rules_' + environment
+                    ]
+                },
+                
+                decision_summary: {
+                    status: 'completed',
+                    output: decisionSummary,
+                    human_override: humanOverride,
+                    override_reason: humanOverride ? 'Clinical judgment applied' : null
+                },
+                
+                halo_chain: {
+                    version: 'v1',
+                    canonicalization: 'json_c14n_v1',
+                    blocks: [
+                        {
+                            block: 1,
+                            label: 'genesis',
+                            prev_hash: null,
+                            hash: block1Hash.substring(0, 20) + '...'
+                        },
+                        {
+                            block: 2,
+                            label: 'intent',
+                            prev_hash: block1Hash.substring(0, 20) + '...',
+                            hash: block2Hash.substring(0, 20) + '...'
+                        },
+                        {
+                            block: 3,
+                            label: 'inputs',
+                            prev_hash: block2Hash.substring(0, 20) + '...',
+                            hash: block3Hash.substring(0, 20) + '...'
+                        },
+                        {
+                            block: 4,
+                            label: 'policy_and_model',
+                            prev_hash: block3Hash.substring(0, 20) + '...',
+                            hash: block4Hash.substring(0, 20) + '...'
+                        },
+                        {
+                            block: 5,
+                            label: 'output',
+                            prev_hash: block4Hash.substring(0, 20) + '...',
+                            hash: block5Hash.substring(0, 20) + '...'
+                        }
+                    ],
+                    final_hash: finalHash.substring(0, 20) + '...'
+                },
+                
+                signature: {
+                    algorithm: 'ECDSA_SHA_256',
+                    value: signature,
+                    signed_at: timestamp
+                },
+                
+                verification: {
+                    instructions: 'Run: python tools/eli_verify.py certificate.json --public-key public.pem',
+                    public_key_url: 'https://sentinel.example.com/v1/keys/public',
+                    offline_capable: true
+                },
+                
+                protocol_metadata: {
+                    halo_version: 'v1',
+                    c14n_version: 'json_c14n_v1',
+                    signing_algorithm: 'ECDSA_SHA_256'
+                }
+            };
+
+            displayCertificate(currentCertificate);
+        }
+
+        function displayCertificate(cert) {
+            const preview = document.getElementById('certificatePreview');
+            preview.textContent = JSON.stringify(cert, null, 2);
+        }
+
+        function downloadJSON() {
+            if (!currentCertificate) {
+                alert('Please generate a certificate first');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(currentCertificate, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `certificate_${currentCertificate.certificate_id}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadPDF() {
+            alert('PDF export is a placeholder in this demo.\n\nIn production, this would generate a professionally formatted PDF with:\n\n- Medical document styling\n- Certificate header with official seal\n- All certificate data in readable format\n- Embedded JSON for verification\n- QR code for quick verification\n\nImplementation requires a PDF library like jsPDF or server-side PDF generation.');
+        }
+
+        // Generate initial certificate on load
+        window.addEventListener('load', () => {
+            setTimeout(generateCertificate, 500);
+        });
+    </script>
+</body>
+</html>
