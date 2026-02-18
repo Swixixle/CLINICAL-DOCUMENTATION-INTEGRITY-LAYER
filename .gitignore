@@ -42,3 +42,11 @@ venv.bak/
 # Database files
 *.db
 *.db-journal
+
+# Phase 2-4 files (moved to separate PRs)
+*.backup
+*.old
+*.phase2
+*.phase3
+*.phase4
+*.reference

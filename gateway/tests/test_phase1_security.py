@@ -430,7 +430,7 @@ def test_proof_5_audit_pack_completeness(client):
     
     # Get evidence bundle (if endpoint returns 200, bundle is complete)
     bundle_response = client.get(
-        f"/v1/certificates/{cert_id}/bundle",
+        f"/v1/certificates/{cert_id}/evidence-bundle.zip",
         headers=create_auth_headers(token=auditor_token)
     )
     

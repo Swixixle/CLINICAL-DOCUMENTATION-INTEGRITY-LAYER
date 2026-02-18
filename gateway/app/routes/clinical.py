@@ -621,9 +621,9 @@ async def get_certificate_pdf(
     )
 
 
-@router.get("/certificates/{certificate_id}/bundle")
+@router.get("/certificates/{certificate_id}/evidence-bundle.zip")
 @limiter.limit("100/minute")  # Rate limit: 100 bundle generations per minute
-async def get_evidence_bundle(
+async def get_evidence_bundle_zip(
     request: Request,  # Required for rate limiting
     certificate_id: str,
     identity: Identity = Depends(get_current_identity)
@@ -637,6 +637,7 @@ async def get_evidence_bundle(
     Bundle contains:
     - certificate.json
     - certificate.pdf
+    - evidence_bundle.json
     - verification_report.json
     - README_VERIFICATION.txt
     
@@ -698,7 +699,7 @@ async def get_evidence_bundle(
     )
 
 
-@router.get("/certificates/{certificate_id}/evidence-bundle")
+@router.get("/certificates/{certificate_id}/evidence-bundle.json")
 @limiter.limit("100/minute")  # Rate limit: 100 bundle generations per minute
 async def get_evidence_bundle_json(
     request: Request,  # Required for rate limiting
