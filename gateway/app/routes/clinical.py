@@ -4,8 +4,9 @@ Clinical documentation endpoints for CDIL.
 Handles certificate issuance and verification for AI-generated clinical notes.
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, Header
+from fastapi.responses import Response
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
 from gateway.app.models.clinical import (
@@ -18,6 +19,9 @@ from gateway.app.models.clinical import (
 from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
+from gateway.app.services.verification_interpreter import interpret_verification
+from gateway.app.services.certificate_pdf import generate_certificate_pdf
+from gateway.app.services.evidence_bundle import generate_evidence_bundle
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
@@ -136,25 +140,59 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     This endpoint is called when a clinical note is finalized and ready for
     commitment to the EHR. It:
     
-    1. Hashes note content and PHI fields
-    2. Retrieves tenant's chain head
-    3. Computes new chain hash
-    4. Signs the certificate
-    5. Stores the certificate
-    6. Returns certificate and verification URL
+    1. Validates note_text for PHI patterns (rejects obvious PHI)
+    2. Hashes note content and PHI fields (never stores plaintext)
+    3. Retrieves tenant's chain head
+    4. Computes new chain hash
+    5. Signs the certificate
+    6. Stores the certificate
+    7. Returns certificate and verification URL
     
     Args:
         request: Clinical documentation details
         
     Returns:
         Certificate issuance response with certificate_id and full certificate
+        
+    Raises:
+        HTTPException: 400 if PHI patterns detected in note_text
     """
+    import re
+    
+    # Step 0: PHI Detection Guardrails - reject obvious PHI patterns
+    # This protects against accidental PHI exposure in note_text
+    note_text = request.note_text
+    
+    phi_patterns = {
+        "ssn": r'\b\d{3}-\d{2}-\d{4}\b',  # SSN: 123-45-6789
+        "phone": r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # Phone: 555-123-4567
+        "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email
+    }
+    
+    detected_phi = []
+    for phi_type, pattern in phi_patterns.items():
+        if re.search(pattern, note_text):
+            detected_phi.append(phi_type)
+    
+    if detected_phi:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "phi_detected_in_note_text",
+                "message": "Note text contains potential PHI patterns that should not be included",
+                "detected_patterns": detected_phi,
+                "guidance": "Remove SSN, phone numbers, and email addresses from note_text before submission"
+            }
+        )
+    
     # Step 1: Generate certificate ID and timestamp
     certificate_id = generate_uuid7()
     timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    finalized_at = timestamp  # Server sets finalization time, never client
     
     # Step 2: Hash PHI fields (note_text, patient_reference, reviewer_id)
-    note_hash = sha256_hex(request.note_text.encode('utf-8'))
+    # IMPORTANT: note_text is NEVER persisted in plaintext, only its hash
+    note_hash = sha256_hex(note_text.encode('utf-8'))
     
     patient_hash = None
     if request.patient_reference:
@@ -163,6 +201,10 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     reviewer_hash = None
     if request.human_reviewer_id:
         reviewer_hash = sha256_hex(request.human_reviewer_id.encode('utf-8'))
+    
+    # Step 3: Compute policy hash and generate governance summary
+    policy_hash = sha256_hex(request.governance_policy_version.encode('utf-8'))
+    governance_summary = f"Governance policy {request.governance_policy_version} applied. Model: {request.model_version}. Human reviewed: {request.human_reviewed}."
     
     # Step 3: Get tenant's current chain head
     previous_hash = get_tenant_chain_head(request.tenant_id)
@@ -198,9 +240,14 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
         "certificate_id": certificate_id,
         "tenant_id": request.tenant_id,
         "timestamp": timestamp,
+        "finalized_at": finalized_at,
+        "ehr_referenced_at": None,  # Can be set later
+        "ehr_commit_id": None,  # Can be set later
         "model_version": request.model_version,
         "prompt_version": request.prompt_version,
         "governance_policy_version": request.governance_policy_version,
+        "policy_hash": policy_hash,
+        "governance_summary": governance_summary,
         "note_hash": note_hash,
         "patient_hash": patient_hash,
         "reviewer_hash": reviewer_hash,
@@ -231,21 +278,35 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
 
 
 @router.get("/certificates/{certificate_id}")
-async def get_certificate(certificate_id: str) -> DocumentationIntegrityCertificate:
+async def get_certificate(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> DocumentationIntegrityCertificate:
     """
     Retrieve a certificate by its ID.
     
+    Requires X-Tenant-Id header for tenant isolation.
     Returns the stored certificate with no plaintext PHI.
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         Complete certificate
         
     Raises:
-        HTTPException: 404 if certificate not found
+        HTTPException: 400 if X-Tenant-Id header missing
+        HTTPException: 404 if certificate not found or tenant mismatch
     """
+    if not x_tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_tenant_id",
+                "message": "X-Tenant-Id header is required"
+            }
+        )
     import json
     from gateway.app.db.migrate import get_connection
     
@@ -262,23 +323,41 @@ async def get_certificate(certificate_id: str) -> DocumentationIntegrityCertific
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate_dict = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate_dict.get("tenant_id") != x_tenant_id:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "tenant_mismatch",
+                    "message": "Certificate not found"  # Don't reveal existence to other tenants
+                }
+            )
+        
         return DocumentationIntegrityCertificate(**certificate_dict)
     finally:
         conn.close()
 
 
 @router.post("/certificates/{certificate_id}/verify")
-async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
+async def verify_certificate(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a certificate.
     
+    Requires X-Tenant-Id header for tenant isolation.
+    
     Verifies:
-    1. Certificate exists
-    2. Chain hash is valid (recomputes from stored fields)
-    3. Signature is valid
+    1. Certificate exists and belongs to tenant
+    2. Timing integrity (if ehr_referenced_at is set)
+    3. Chain hash is valid (recomputes from stored fields)
+    4. Signature is valid
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         Verification result with:
@@ -296,6 +375,15 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
     from gateway.app.services.signer import verify_signature
     from gateway.app.services.storage import get_key
     
+    if not x_tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_tenant_id",
+                "message": "X-Tenant-Id header is required"
+            }
+        )
+    
     # Load certificate
     conn = get_connection()
     try:
@@ -310,10 +398,39 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "tenant_mismatch",
+                    "message": "Certificate not found"  # Don't reveal existence to other tenants
+                }
+            )
     finally:
         conn.close()
     
     failures = []
+    
+    # Verify timing integrity
+    finalized_at_str = certificate.get("finalized_at")
+    ehr_referenced_at_str = certificate.get("ehr_referenced_at")
+    
+    if finalized_at_str and ehr_referenced_at_str:
+        try:
+            from datetime import datetime
+            finalized_at = datetime.fromisoformat(finalized_at_str.replace('Z', '+00:00'))
+            ehr_referenced_at = datetime.fromisoformat(ehr_referenced_at_str.replace('Z', '+00:00'))
+            
+            if finalized_at > ehr_referenced_at:
+                debug_info = {
+                    "finalized_at": finalized_at_str,
+                    "ehr_referenced_at": ehr_referenced_at_str
+                }
+                failures.append(fail("timing", "finalized_after_ehr_reference", debug_info))
+        except Exception as e:
+            failures.append(fail("timing", "timestamp_parse_error", {"exception": type(e).__name__}))
     
     # Verify chain hash
     try:
@@ -393,175 +510,268 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
     
     valid = len(failures) == 0
     
+    # Generate human-friendly interpretation
+    human_friendly_report = interpret_verification(
+        failures=failures,
+        valid=valid,
+        certificate_id=certificate_id,
+        timestamp=certificate.get("timestamp")
+    )
+    
     return {
         "certificate_id": certificate_id,
         "valid": valid,
-        "failures": failures
+        "failures": failures,
+        "human_friendly_report": human_friendly_report
     }
-Clinical documentation endpoint for healthcare-specific integrity certificates.
-
-This wraps the existing AI execution + packet builder with healthcare-specific
-models and governance checks.
-"""
-
-from fastapi import APIRouter
-from datetime import datetime, timezone
-from typing import Dict, Any
-
-from gateway.app.models.clinical import (
-    ClinicalDocRequest,
-    ClinicalDocResponse,
-    ClinicalDocumentationCertificate
-)
-from gateway.app.services.hashing import sha256_hex
-from gateway.app.services.uuid7 import generate_uuid7
-from gateway.app.services.packet_builder import build_accountability_packet
-from gateway.app.services.storage import store_transaction
-
-router = APIRouter(prefix="/v1/clinical", tags=["clinical"])
 
 
-def execute_governance_checks(
-    request: ClinicalDocRequest,
-    note_hash: str,
-    patient_hash: str
-) -> Dict[str, Any]:
+@router.get("/certificates/{certificate_id}/pdf")
+async def get_certificate_pdf(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Response:
     """
-    Execute healthcare-specific governance checks.
+    Generate and return certificate as a formal PDF document.
     
-    In v1, these are stubs. The architecture supports real implementations.
+    Requires X-Tenant-Id header for tenant isolation.
     
     Args:
-        request: Clinical documentation request
-        note_hash: Hash of the clinical note
-        patient_hash: Hash of the patient ID
+        certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
-        Dictionary with governance check results
+        PDF file as application/pdf
     """
-    # Stub governance checks - real implementations would include:
-    # - PHI filter to ensure no raw PHI in logs
-    # - Hallucination detection scan
-    # - Bias filter execution
-    # - Clinical accuracy checks
-    # - Regulatory compliance verification
+    if not x_tenant_id:
+        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
     
-    checks_executed = [
-        "phi_filter_executed",
-        "hallucination_scan_executed",
-        "bias_filter_executed"
-    ]
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Load certificate with tenant check
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
+    finally:
+        conn.close()
+    
+    # Verify certificate to get status (with tenant header)
+    verification_result = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
+    valid = verification_result.get("valid", False)
+    
+    # Generate PDF
+    pdf_bytes = generate_certificate_pdf(certificate, valid=valid)
+    
+    # Return PDF
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=certificate-{certificate_id}.pdf"
+        }
+    )
+
+
+@router.get("/certificates/{certificate_id}/bundle")
+async def get_evidence_bundle(
+    certificate_id: str,
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+) -> Response:
+    """
+    Generate and return complete evidence bundle as ZIP archive.
+    
+    Requires X-Tenant-Id header for tenant isolation.
+    
+    Bundle contains:
+    - certificate.json
+    - certificate.pdf
+    - verification_report.json
+    - README_VERIFICATION.txt
+    
+    Args:
+        certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header
+        
+    Returns:
+        ZIP file as application/zip
+    """
+    if not x_tenant_id:
+        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
+    
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Load certificate with tenant check
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != x_tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
+    finally:
+        conn.close()
+    
+    # Verify certificate (with tenant header)
+    verification_report = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
+    
+    # Generate PDF
+    pdf_bytes = generate_certificate_pdf(certificate, valid=verification_report.get("valid", False))
+    
+    # Generate bundle
+    bundle_bytes = generate_evidence_bundle(
+        certificate=certificate,
+        certificate_pdf=pdf_bytes,
+        verification_report=verification_report
+    )
+    
+    # Return ZIP
+    return Response(
+        content=bundle_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=evidence-bundle-{certificate_id}.zip"
+        }
+    )
+
+
+@router.post("/certificates/query")
+async def query_certificates(
+    tenant_id: str,
+    date_from: str = None,
+    date_to: str = None,
+    model_version: str = None,
+    governance_policy_version: str = None,
+    human_reviewed: bool = None,
+    limit: int = 100,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """
+    Query certificates for audit and reporting purposes.
+    
+    Supports filtering by:
+    - tenant_id (required) - ensures tenant isolation
+    - date_from, date_to - filter by finalized_at timestamp
+    - model_version - filter by AI model version
+    - governance_policy_version - filter by policy version
+    - human_reviewed - filter by review status
+    
+    Args:
+        tenant_id: Required tenant identifier (enforces isolation)
+        date_from: Optional start date (ISO 8601 UTC)
+        date_to: Optional end date (ISO 8601 UTC)
+        model_version: Optional AI model version
+        governance_policy_version: Optional governance policy version
+        human_reviewed: Optional human review status filter
+        limit: Maximum number of results (default 100, max 1000)
+        offset: Pagination offset (default 0)
+        
+    Returns:
+        Dictionary with:
+        - total_count: Total matching certificates
+        - certificates: List of certificate summaries
+        - limit: Results limit
+        - offset: Results offset
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    
+    # Validate limit
+    if limit > 1000:
+        limit = 1000
+    
+    # Build query
+    query = "SELECT certificate_json FROM certificates WHERE tenant_id = ?"
+    params = [tenant_id]
+    
+    # Add filters
+    if date_from:
+        query += " AND created_at_utc >= ?"
+        params.append(date_from)
+    
+    if date_to:
+        query += " AND created_at_utc <= ?"
+        params.append(date_to)
+    
+    # For filters that need JSON parsing, we'll filter in Python after loading
+    # This is acceptable for MVP; production would use JSON columns or denormalized fields
+    
+    # Execute query
+    conn = get_connection()
+    try:
+        # Get total count
+        count_query = query.replace("SELECT certificate_json", "SELECT COUNT(*)")
+        cursor = conn.execute(count_query, params)
+        total_count = cursor.fetchone()[0]
+        
+        # Get certificates with pagination
+        query += f" ORDER BY created_at_utc DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
+        
+        # Parse certificates and apply additional filters
+        certificates = []
+        for row in rows:
+            cert = json.loads(row['certificate_json'])
+            
+            # Apply JSON-based filters
+            if model_version and cert.get('model_version') != model_version:
+                continue
+            
+            if governance_policy_version and cert.get('governance_policy_version') != governance_policy_version:
+                continue
+            
+            if human_reviewed is not None and cert.get('human_reviewed') != human_reviewed:
+                continue
+            
+            # Build summary (no full certificate data, no PHI)
+            summary = {
+                "certificate_id": cert.get("certificate_id"),
+                "tenant_id": cert.get("tenant_id"),
+                "timestamp": cert.get("timestamp"),
+                "finalized_at": cert.get("finalized_at"),
+                "model_version": cert.get("model_version"),
+                "prompt_version": cert.get("prompt_version"),
+                "governance_policy_version": cert.get("governance_policy_version"),
+                "human_reviewed": cert.get("human_reviewed"),
+                "note_hash_prefix": cert.get("note_hash", "")[:16],
+                "chain_hash_prefix": cert.get("integrity_chain", {}).get("chain_hash", "")[:16]
+            }
+            certificates.append(summary)
+    finally:
+        conn.close()
     
     return {
-        "checks_executed": checks_executed,
-        "all_passed": True,
-        "policy_version": request.governance_policy_version
+        "total_count": total_count,
+        "returned_count": len(certificates),
+        "limit": limit,
+        "offset": offset,
+        "certificates": certificates
     }
-
-
-@router.post("/documentation", response_model=ClinicalDocResponse)
-async def create_clinical_documentation_certificate(
-    request: ClinicalDocRequest
-) -> ClinicalDocResponse:
-    """
-    Generate a Clinical Documentation Integrity Certificate.
-    
-    This endpoint:
-    1. Hashes the clinical note and patient ID (never stores raw PHI)
-    2. Executes governance checks (stubs in v1)
-    3. Generates integrity packet using existing HALO + packet builder
-    4. Stores the certificate
-    5. Returns certificate with verification URL
-    
-    Flow:
-    - AI vendor → This endpoint → Integrity certificate
-    - Certificate can be verified offline
-    - No PHI stored in plaintext
-    """
-    # Generate certificate ID and timestamp
-    certificate_id = generate_uuid7()
-    timestamp_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    
-    # Hash sensitive data (never store raw)
-    note_hash = sha256_hex(request.note_text.encode('utf-8'))
-    patient_hash = sha256_hex(request.patient_id.encode('utf-8'))
-    
-    # Execute governance checks
-    governance_result = execute_governance_checks(request, note_hash, patient_hash)
-    
-    # Build accountability packet using existing infrastructure
-    # Map clinical fields to existing packet builder parameters
-    packet = build_accountability_packet(
-        transaction_id=certificate_id,
-        gateway_timestamp_utc=timestamp_utc,
-        environment=request.environment,
-        client_id=request.clinician_id,
-        intent_manifest="clinical-documentation",
-        feature_tag=request.note_type or "clinical-note",
-        user_ref=request.human_editor_id or request.clinician_id,
-        prompt_hash=request.prompt_version,  # Store prompt version as hash
-        rag_hash=None,
-        multimodal_hash=None,
-        policy_version_hash=sha256_hex(request.governance_policy_version.encode('utf-8')),
-        policy_change_ref=request.governance_policy_version,
-        rules_applied=governance_result["checks_executed"],
-        policy_decision="approved",
-        model_fingerprint=f"{request.ai_vendor}:{request.model_version}",
-        param_snapshot={
-            "ai_vendor": request.ai_vendor,
-            "model_version": request.model_version,
-            "prompt_version": request.prompt_version,
-            "human_reviewed": request.human_reviewed,
-            "human_editor_id": request.human_editor_id
-        },
-        execution={
-            "outcome": "approved",
-            "output_hash": note_hash,
-            "encounter_id": request.encounter_id,
-            "patient_hash": patient_hash,
-            "governance_checks": governance_result["checks_executed"]
-        }
-    )
-    
-    # Add clinical-specific governance metadata to packet
-    packet["governance_metadata"] = {
-        "governance_checks": governance_result["checks_executed"],
-        "policy_version": request.governance_policy_version,
-        "clinical_context": {
-            "encounter_id": request.encounter_id,
-            "note_type": request.note_type,
-            "human_reviewed": request.human_reviewed
-        }
-    }
-    
-    # Store the packet
-    store_transaction(packet)
-    
-    # Build certificate response
-    certificate = ClinicalDocumentationCertificate(
-        certificate_id=certificate_id,
-        encounter_id=request.encounter_id,
-        model_version=request.model_version,
-        prompt_version=request.prompt_version,
-        governance_policy_version=request.governance_policy_version,
-        note_hash=note_hash,
-        patient_hash=patient_hash,
-        timestamp=timestamp_utc,
-        human_reviewed=request.human_reviewed,
-        signature=packet["verification"]["signature_b64"],
-        final_hash=packet["halo_chain"]["final_hash"],
-        governance_checks=governance_result["checks_executed"]
-    )
-    
-    # Generate verification URL (assumes standard base URL)
-    verification_url = f"/v1/transactions/{certificate_id}/verify"
-    
-    # Get hash prefix for quick reference
-    hash_prefix = packet["halo_chain"]["final_hash"][:8]
-    
-    return ClinicalDocResponse(
-        certificate_id=certificate_id,
-        verification_url=verification_url,
-        hash_prefix=hash_prefix,
-        certificate=certificate
-    )

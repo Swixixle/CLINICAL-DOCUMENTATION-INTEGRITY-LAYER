@@ -2,13 +2,11 @@
 Clinical Documentation Integrity Layer (CDIL) - FastAPI Application
 
 This is the main entry point for the CDIL API.
-This is the main entry point for the CDIL Gateway API.
 """
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from gateway.app.routes import health, keys, transactions, ai, clinical
 from gateway.app.routes import health, keys, transactions, ai, clinical, mock
 from gateway.app.db.migrate import ensure_schema
 
@@ -38,8 +36,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Clinical Documentation Integrity Layer",
     description="Cryptographically signed integrity certificates for AI-generated clinical documentation",
-    title="ELI Sentinel Gateway",
-    description="Clinical Decision Integrity Certificates for AI-Assisted Respiratory Care",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -58,14 +54,6 @@ async def root():
     """Root endpoint."""
     return {
         "service": "Clinical Documentation Integrity Layer",
-        "service": "ELI Sentinel Gateway",
-        "tagline": "Clinical Decision Integrity Certificates for AI-Assisted Care",
-        "focus": "Respiratory Care Workflows",
         "version": "0.1.0",
-        "status": "operational",
-        "use_cases": [
-            "Sepsis prediction alerts",
-            "Ventilator weaning recommendations", 
-            "ABG trend interpretation"
-        ]
+        "status": "operational"
     }
