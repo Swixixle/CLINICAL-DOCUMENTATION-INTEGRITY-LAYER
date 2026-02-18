@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
 
+from gateway.app.models import AICallRequest, ModelRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
 from gateway.app.services.packet_builder import build_accountability_packet
@@ -15,19 +16,6 @@ from gateway.app.services.storage import store_transaction
 from gateway.app.services.hashing import sha256_hex, hash_c14n
 
 router = APIRouter(prefix="/v1/ai", tags=["ai"])
-
-
-class AICallRequest(BaseModel):
-    """Request body for /v1/ai/call endpoint."""
-    prompt: str = Field(..., description="The prompt text to send to the AI model")
-    environment: str = Field(..., description="Environment: production, staging, or dev")
-    client_id: str = Field(..., description="Client identifier")
-    feature_tag: str = Field(..., description="Feature tag (e.g., billing, customer-support)")
-    user_ref: str = Field(default="system", description="User reference")
-    model: str = Field(..., description="Model identifier")
-    temperature: float = Field(default=0.7, description="Model temperature parameter")
-    rag_context: Optional[Dict[str, Any]] = Field(default=None, description="Optional RAG context")
-    intent_manifest: str = Field(default="text-generation", description="Intent type")
 
 
 class AICallResponse(BaseModel):
@@ -56,8 +44,19 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     transaction_id = str(uuid.uuid4())
     gateway_timestamp_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     
+    # Handle both new model_request and legacy model/temperature fields
+    if hasattr(request, 'model') and request.model:
+        # Legacy format
+        model = request.model
+        temperature = request.temperature if request.temperature is not None else 0.7
+    else:
+        # New format
+        model = request.model_request.model
+        temperature = request.model_request.temperature
+    
     # Step 2: Compute content hashes
-    prompt_hash = sha256_hex(request.prompt.encode('utf-8'))
+    prompt_text = request.prompt if isinstance(request.prompt, str) else str(request.prompt)
+    prompt_hash = sha256_hex(prompt_text.encode('utf-8'))
     
     rag_hash = None
     if request.rag_context:
@@ -65,11 +64,13 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     
     # Step 3: Evaluate policy (pre-execution)
     policy_request = {
-        "model": request.model,
-        "temperature": request.temperature,
+        "model": model,
+        "temperature": temperature,
         "feature_tag": request.feature_tag,
         "environment": request.environment,
-        "intent_manifest": request.intent_manifest
+        "intent_manifest": request.intent_manifest,
+        "network_access": request.network_access,
+        "tool_permissions": request.tool_permissions
     }
     
     policy_receipt = evaluate_request(policy_request, request.environment)
@@ -77,9 +78,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     # Step 4: Execute AI call or create denial stub
     if policy_receipt["decision"] == "approved":
         execution = execute({
-            "prompt": request.prompt,
-            "model": request.model,
-            "temperature": request.temperature
+            "prompt": prompt_text,
+            "model": model,
+            "temperature": temperature
         })
     else:
         # Denied execution stub
@@ -108,8 +109,9 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         policy_version_hash=policy_receipt["policy_version_hash"],
         policy_change_ref=policy_receipt["policy_change_ref"],
         rules_applied=policy_receipt["rules_applied"],
-        model_fingerprint=request.model,
-        param_snapshot={"temperature": request.temperature},
+        policy_decision=policy_receipt["decision"],
+        model_fingerprint=model,
+        param_snapshot={"temperature": temperature},
         execution=execution
     )
     

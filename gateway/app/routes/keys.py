@@ -26,9 +26,9 @@ async def get_public_key(key_id: str) -> Dict[str, Any]:
     """
     Get a specific public key by key_id.
     
-    Returns JWK public key.
+    Returns JWK public key object only (not wrapped).
     """
     key = get_key(key_id)
     if not key:
         raise HTTPException(status_code=404, detail=f"Key not found: {key_id}")
-    return key
+    return key["jwk"]

@@ -13,6 +13,10 @@ from pathlib import Path
 from gateway.app.db.migrate import get_connection
 
 
+# Key configuration
+KEY_ID = "dev-key-01"
+
+
 def store_transaction(packet: Dict[str, Any]) -> None:
     """
     Store a transaction packet in the database.
@@ -181,10 +185,11 @@ def bootstrap_dev_keys() -> None:
     """
     Bootstrap development keys into the database.
     
-    Loads dev_public.jwk.json and inserts it if not already present.
+    Loads dev_public.jwk.json and inserts it with KEY_ID if not already present.
+    This ensures key stability across restarts.
     """
     # Check if dev key already exists
-    existing_key = get_key("dev-key-01")
+    existing_key = get_key(KEY_ID)
     if existing_key:
         # Already bootstrapped
         return
@@ -194,5 +199,5 @@ def bootstrap_dev_keys() -> None:
     with open(jwk_path, 'r') as f:
         jwk = json.load(f)
     
-    # Store in database
-    store_key("dev-key-01", jwk, "active")
+    # Store in database with stable KEY_ID
+    store_key(KEY_ID, jwk, "active")

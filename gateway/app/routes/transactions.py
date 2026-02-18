@@ -30,43 +30,128 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a transaction.
     
-    Recomputes HALO chain and verifies signature.
-    Returns validation results.
+    Recomputes HALO chain from packet fields using explicit builder,
+    compares to stored HALO, and verifies signature.
+    Returns structured validation results with failures list.
     """
+    from gateway.app.services.halo import build_halo_chain
+    from gateway.app.services.storage import get_key
+    
     # Load packet
     packet = get_transaction(transaction_id)
     if not packet:
         raise HTTPException(status_code=404, detail=f"Transaction not found: {transaction_id}")
     
-    # Verify HALO chain
-    halo_verification = verify_halo_chain(packet.get("halo_chain", {}))
-    halo_valid = halo_verification.get("valid", False)
+    failures = []
     
-    # Verify signature
+    # Recompute HALO chain from packet fields
+    try:
+        recomputed_halo = build_halo_chain(
+            transaction_id=packet["transaction_id"],
+            gateway_timestamp_utc=packet["gateway_timestamp_utc"],
+            environment=packet["environment"],
+            client_id=packet["client_id"],
+            intent_manifest=packet["intent_manifest"],
+            feature_tag=packet["feature_tag"],
+            user_ref=packet["user_ref"],
+            prompt_hash=packet["prompt_hash"],
+            rag_hash=packet.get("rag_hash"),
+            multimodal_hash=packet.get("multimodal_hash"),
+            policy_version_hash=packet["policy_receipt"]["policy_version_hash"],
+            policy_change_ref=packet["policy_receipt"]["policy_change_ref"],
+            rules_applied=packet["policy_receipt"]["rules_applied"],
+            model_fingerprint=packet["model_fingerprint"],
+            param_snapshot=packet["param_snapshot"],
+            execution=packet["execution"]
+        )
+        
+        # Compare recomputed HALO final hash to stored HALO final hash
+        stored_final_hash = packet.get("halo_chain", {}).get("final_hash")
+        recomputed_final_hash = recomputed_halo.get("final_hash")
+        
+        if stored_final_hash != recomputed_final_hash:
+            failures.append({
+                "check": "halo_chain",
+                "error": "final_hash_mismatch"
+            })
+    except Exception as e:
+        failures.append({
+            "check": "halo_chain",
+            "error": f"recomputation_failed: {str(e)}"
+        })
+    
+    # Verify signature using key from packet's verification.key_id
     signature_bundle = packet.get("verification", {})
     key_id = signature_bundle.get("key_id")
     
-    signature_valid = False
-    key_found = False
-    
-    if key_id:
-        # Load the public key JWK
-        from gateway.app.services.storage import get_key
+    if not key_id:
+        failures.append({
+            "check": "signature",
+            "error": "missing_key_id"
+        })
+    else:
+        # Look up key in database
         key = get_key(key_id)
         
-        if key:
-            key_found = True
+        if not key:
+            # Fallback to dev JWK only if environment is not prod
+            if packet.get("environment") != "prod":
+                from pathlib import Path
+                import json
+                jwk_path = Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
+                try:
+                    with open(jwk_path, 'r') as f:
+                        jwk = json.load(f)
+                except:
+                    failures.append({
+                        "check": "signature",
+                        "error": "key_not_found_and_fallback_failed"
+                    })
+                    jwk = None
+            else:
+                failures.append({
+                    "check": "signature",
+                    "error": "key_not_found_in_prod"
+                })
+                jwk = None
+        else:
             jwk = key.get("jwk")
-            if jwk:
+        
+        if jwk:
+            try:
                 signature_valid = verify_signature(signature_bundle, jwk)
+                if not signature_valid:
+                    failures.append({
+                        "check": "signature",
+                        "error": "invalid_signature"
+                    })
+            except Exception as e:
+                failures.append({
+                    "check": "signature",
+                    "error": f"verification_failed: {str(e)}"
+                })
     
-    overall_valid = halo_valid and signature_valid and key_found
+    valid = len(failures) == 0
     
-    return {
-        "valid": overall_valid,
-        "checks": {
-            "halo_chain": "valid" if halo_valid else "invalid",
-            "signature": "valid" if signature_valid else "invalid",
-            "key": "found" if key_found else "missing"
-        }
+    # Return structured result with both new failures list and legacy checks
+    result = {
+        "valid": valid,
+        "failures": failures
     }
+    
+    # Add legacy checks field for backward compatibility
+    if not failures:
+        result["checks"] = {
+            "halo_chain": "valid",
+            "signature": "valid",
+            "key": "found"
+        }
+    else:
+        result["checks"] = {}
+        for failure in failures:
+            if failure["check"] == "halo_chain":
+                result["checks"]["halo_chain"] = "invalid"
+            elif failure["check"] == "signature":
+                result["checks"]["signature"] = "invalid"
+    
+    return result
