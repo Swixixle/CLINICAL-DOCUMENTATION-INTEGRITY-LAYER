@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from gateway.app.routes import health, keys, transactions, ai, clinical
+from gateway.app.routes import health, keys, transactions, ai, clinical, mock
 from gateway.app.db.migrate import ensure_schema
 
 
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Clinical Documentation Integrity Layer",
     description="Cryptographically signed integrity certificates for AI-generated clinical documentation",
+    title="ELI Sentinel Gateway",
+    description="Clinical Decision Integrity Certificates for AI-Assisted Respiratory Care",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -46,6 +49,7 @@ app.include_router(keys.router)
 app.include_router(transactions.router)
 app.include_router(ai.router)
 app.include_router(clinical.router)
+app.include_router(mock.router)
 
 
 @app.get("/")
@@ -53,6 +57,14 @@ async def root():
     """Root endpoint."""
     return {
         "service": "Clinical Documentation Integrity Layer",
+        "service": "ELI Sentinel Gateway",
+        "tagline": "Clinical Decision Integrity Certificates for AI-Assisted Care",
+        "focus": "Respiratory Care Workflows",
         "version": "0.1.0",
-        "status": "operational"
+        "status": "operational",
+        "use_cases": [
+            "Sepsis prediction alerts",
+            "Ventilator weaning recommendations", 
+            "ABG trend interpretation"
+        ]
     }
