@@ -30,8 +30,6 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a transaction.
     
-    Recomputes HALO chain and verifies signature.
-    Returns validation results with failures array.
     Recomputes HALO chain from packet fields using explicit builder,
     compares to stored HALO, and verifies signature.
     Returns structured validation results with failures list.
@@ -45,30 +43,6 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Transaction not found: {transaction_id}")
     
     failures = []
-    
-    # Verify HALO chain
-    halo_verification = verify_halo_chain(packet.get("halo_chain", {}))
-    halo_valid = halo_verification.get("valid", False)
-    
-    if not halo_valid:
-        # Add HALO chain failures
-        discrepancies = halo_verification.get("discrepancies", [])
-        if discrepancies:
-            for discrepancy in discrepancies:
-                failures.append({
-                    "check": "halo_chain",
-                    "field": discrepancy.get("field"),
-                    "message": f"HALO chain mismatch at block {discrepancy.get('block_index')}: "
-                               f"{discrepancy.get('field')} expected {discrepancy.get('expected')}, "
-                               f"got {discrepancy.get('actual')}"
-                })
-        else:
-            failures.append({
-                "check": "halo_chain",
-                "message": "HALO chain verification failed"
-            })
-    
-    # Verify signature
     
     # Recompute HALO chain from packet fields
     try:
@@ -96,6 +70,17 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
         recomputed_final_hash = recomputed_halo.get("final_hash")
         
         if stored_final_hash != recomputed_final_hash:
+            # Hash leakage policy: return error code + prefixes only (first 16 chars)
+            stored_prefix = stored_final_hash[:16] if stored_final_hash else "none"
+            recomputed_prefix = recomputed_final_hash[:16] if recomputed_final_hash else "none"
+            failures.append({
+                "check": "halo_chain",
+                "error": "final_hash_mismatch",
+                "debug": {
+                    "stored_prefix": stored_prefix,
+                    "recomputed_prefix": recomputed_prefix
+                }
+            })
             # Use error code instead of full hash values (security best practice)
             # Include only hash prefixes for debugging without leaking full cryptographic material
             failure = {
@@ -112,7 +97,8 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
     except Exception as e:
         failures.append({
             "check": "halo_chain",
-            "error": f"recomputation_failed: {str(e)}"
+            "error": "recomputation_failed",
+            "debug": {"message": str(e)[:100]}
         })
     
     # Verify signature using key from packet's verification.key_id
@@ -163,7 +149,8 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             except Exception as e:
                 failures.append({
                     "check": "signature",
-                    "error": f"verification_failed: {str(e)}"
+                    "error": "verification_failed",
+                    "debug": {"message": str(e)[:100]}
                 })
     
     valid = len(failures) == 0

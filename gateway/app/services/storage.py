@@ -108,8 +108,20 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     It does NOT recompute, normalize, or derive ANY packet fields.
     It only extracts indexed fields from the provided packet for query optimization.
     
+    CRITICAL INVARIANTS:
+    - Stores JSON blob exactly as provided (no field recomputation)
+    - Only updates indexed columns from fields already inside the blob
+    - Never touches/rewrites packet["halo_chain"], packet["verification"], etc.
+    - Does NOT normalize or compute anything - packet is stored as-is
+    
     Args:
         transaction_id: Transaction identifier
+        packet: Updated accountability packet dictionary (stored without modification)
+    """
+    # Serialize packet exactly as provided - no recomputation
+    packet_json = json.dumps(packet, sort_keys=True)
+    
+    # Extract indexed field from packet (read-only, no modification)
         packet: Updated accountability packet dictionary (used as-is, no modifications)
     """
     # Serialize packet exactly as provided - NO MODIFICATIONS
