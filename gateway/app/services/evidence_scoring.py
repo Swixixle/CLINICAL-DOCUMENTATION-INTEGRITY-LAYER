@@ -256,8 +256,8 @@ def score_note_defensibility(
     high_risk_unsupported = 0
     
     for code in diagnosis_codes:
-        # Try to find rule - check both with and without periods
-        # ICD-10 codes can be written as "A41.9" or "A419"
+        # Try to find rule - handles both formats: "A41.9" and "A419"
+        # ICD-10 codes can be written with or without periods
         rule = None
         
         # Try exact match first

@@ -82,7 +82,12 @@ class DashboardResponse(BaseModel):
 
 
 # In-memory storage for dashboard data (per-tenant)
-# In production, this should use a proper database
+# TODO: Replace with persistent storage (database) for production deployments
+# This in-memory approach has limitations:
+# - Data lost on server restart
+# - Won't scale in multi-instance deployments
+# - Memory usage grows with tenant count
+# For Phase 1 pilot deployments, this is acceptable
 DASHBOARD_DATA: Dict[str, Dict[str, Any]] = {}
 
 
@@ -158,6 +163,11 @@ async def analyze_notes(
     }
     
     # Update dashboard data for this tenant
+    # Note: Storing only aggregated metrics and limited scored_notes to prevent memory issues
+    # In production, implement size limits and/or move to persistent storage
+    MAX_STORED_NOTES = 1000  # Limit stored notes to prevent memory issues
+    stored_notes = scored_notes[:MAX_STORED_NOTES] if len(scored_notes) > MAX_STORED_NOTES else scored_notes
+    
     DASHBOARD_DATA[tenant_id] = {
         "last_analysis": datetime.now(timezone.utc).isoformat(),
         "notes_analyzed": len(request.notes),
@@ -165,7 +175,7 @@ async def analyze_notes(
         "percent_flagged": revenue_impact["percent_flagged"],
         "revenue_at_risk": revenue_impact["estimated_revenue_at_risk"],
         "high_risk_diagnoses": revenue_impact["high_risk_diagnoses"],
-        "scored_notes": scored_notes  # Store for dashboard
+        "scored_notes": stored_notes  # Store limited subset for dashboard
     }
     
     return ShadowAnalyzeResponse(
