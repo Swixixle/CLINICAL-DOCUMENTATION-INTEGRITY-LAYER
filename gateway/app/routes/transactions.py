@@ -96,10 +96,19 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
         recomputed_final_hash = recomputed_halo.get("final_hash")
         
         if stored_final_hash != recomputed_final_hash:
-            failures.append({
+            # Use error code instead of full hash values (security best practice)
+            # Include only hash prefixes for debugging without leaking full cryptographic material
+            failure = {
                 "check": "halo_chain",
-                "error": f"final_hash_mismatch: recomputed ({recomputed_final_hash}) != stored ({stored_final_hash})"
-            })
+                "error": "final_hash_mismatch"
+            }
+            # Optional debug fields with hash prefixes only
+            if stored_final_hash and recomputed_final_hash:
+                failure["debug"] = {
+                    "stored_prefix": stored_final_hash[:16] if stored_final_hash else None,
+                    "recomputed_prefix": recomputed_final_hash[:16] if recomputed_final_hash else None
+                }
+            failures.append(failure)
     except Exception as e:
         failures.append({
             "check": "halo_chain",
@@ -149,28 +158,6 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                 if not signature_valid:
                     failures.append({
                         "check": "signature",
-                        "message": "Signature verification failed"
-                    })
-            else:
-                failures.append({
-                    "check": "signature",
-                    "message": "JWK not found in key record"
-                })
-        else:
-            failures.append({
-                "check": "key",
-                "message": f"Key not found: {key_id}"
-            })
-    else:
-        failures.append({
-            "check": "signature",
-            "message": "No key_id in signature bundle"
-        })
-    
-    overall_valid = len(failures) == 0
-    
-    return {
-        "valid": overall_valid,
                         "error": "invalid_signature"
                     })
             except Exception as e:

@@ -182,8 +182,10 @@ def test_allowed_tools_approved(client):
     assert data["status"] == "completed"
 
 
-def test_verify_detects_halo_tampering(client):
-    """Test that verification detects packet field tampering (strong version).
+def test_verify_detects_packet_field_tampering(client):
+    """Test that verification detects packet field tampering.
+    
+    policy_receipt feeds into HALO block 4; tampering must fail.
     
     This test proves the stronger claim: if you tamper with ANY packet field
     that feeds into HALO computation (e.g., policy_receipt), verification fails
@@ -252,10 +254,11 @@ def test_verify_detects_halo_tampering(client):
     # Should have a halo_chain failure with final_hash_mismatch
     halo_failures = [f for f in result["failures"] if f["check"] == "halo_chain"]
     assert len(halo_failures) > 0
-    assert "final_hash_mismatch" in halo_failures[0]["error"]
-    # Verify error message includes both hashes for debugging
-    assert "recomputed" in halo_failures[0]["error"]
-    assert "stored" in halo_failures[0]["error"]
+    assert halo_failures[0]["error"] == "final_hash_mismatch"
+    # Verify debug field includes hash prefixes (not full hashes for security)
+    assert "debug" in halo_failures[0]
+    assert "stored_prefix" in halo_failures[0]["debug"]
+    assert "recomputed_prefix" in halo_failures[0]["debug"]
 
 
 def test_verify_detects_signature_tampering(client):
