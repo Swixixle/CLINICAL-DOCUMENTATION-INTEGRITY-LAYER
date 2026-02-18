@@ -46,7 +46,6 @@ app.include_router(keys.router)
 app.include_router(transactions.router)
 app.include_router(ai.router)
 app.include_router(clinical.router)
-app.include_router(clinical.router2)
 app.include_router(mock.router)
 
 
