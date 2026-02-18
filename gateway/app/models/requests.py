@@ -15,10 +15,23 @@ class ModelRequest(BaseModel):
 
 
 class AICallRequest(BaseModel):
-    """Request body for /v1/ai/call endpoint."""
-    # Core fields
-    environment: str = Field(..., description="Environment: prod, staging, or dev")
-    client_id: str = Field(..., description="Client identifier")
+    """Request body for /v1/ai/call endpoint.
+    
+    Phase 2 Request Contract Fields:
+    - environment and client_id are REQUIRED canonical fields
+    - They are part of the governance model and feed into HALO chain
+    - environment must be one of: prod, staging, dev
+    - client_id identifies the calling application/service
+    
+    These fields are not derived from auth tokens or deployment config
+    in Phase 2. They are explicit request parameters that:
+    1. Enable environment-specific policy evaluation
+    2. Support client-specific governance rules
+    3. Feed into the accountability packet for auditability
+    """
+    # Core fields (Phase 2 canonical request contract)
+    environment: str = Field(..., description="Environment: prod, staging, or dev (REQUIRED)")
+    client_id: str = Field(..., description="Client identifier (REQUIRED)")
     feature_tag: str = Field(..., description="Feature tag (e.g., billing, customer-support)")
     user_ref: str = Field(default="system", description="User reference")
     intent_manifest: str = Field(default="text-generation", description="Intent type")
