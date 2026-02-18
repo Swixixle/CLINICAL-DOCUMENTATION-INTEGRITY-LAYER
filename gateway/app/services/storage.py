@@ -21,6 +21,18 @@ def store_transaction(packet: Dict[str, Any]) -> None:
     """
     Store a transaction packet in the database.
     
+    STORAGE APPROACH: Canonical JSON
+    ================================
+    This system uses canonical JSON serialization (sort_keys=True) as the
+    "truth" representation for cryptographic verification.
+    
+    - Packets are internally constructed by build_accountability_packet()
+    - HALO chain and signatures are computed over the canonical form
+    - Storage preserves this canonical form consistently
+    
+    This is NOT "raw bytes as received" because packets are internally generated,
+    not externally provided. The canonical form ensures deterministic verification.
+    
     Args:
         packet: Complete accountability packet dictionary
     """
@@ -104,21 +116,22 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     This function is intended solely for testing tampering scenarios.
     It must NEVER be used by normal application routes.
     
-    CRITICAL INVARIANT: This function persists the packet blob EXACTLY as provided.
-    It does NOT recompute, normalize, or derive ANY packet fields.
-    It only extracts indexed fields from the provided packet for query optimization.
+    STORAGE APPROACH: Canonical JSON
+    ================================
+    Uses canonical JSON serialization (sort_keys=True) to ensure deterministic
+    storage format that matches the verification process.
     
     CRITICAL INVARIANTS:
-    - Stores JSON blob exactly as provided (no field recomputation)
+    - Stores JSON blob in canonical form (sort_keys=True)
     - Only updates indexed columns from fields already inside the blob
     - Never touches/rewrites packet["halo_chain"], packet["verification"], etc.
-    - Does NOT normalize or compute anything - packet is stored as-is
+    - Does NOT recompute or derive packet fields
     
     Args:
         transaction_id: Transaction identifier
-        packet: Updated accountability packet dictionary (stored without modification)
+        packet: Updated accountability packet dictionary (stored in canonical form)
     """
-    # Serialize packet exactly as provided - no recomputation
+    # Serialize packet in canonical form - matching store_transaction()
     packet_json = json.dumps(packet, sort_keys=True)
     
     # Extract indexed fields from the provided packet (not recomputed)
