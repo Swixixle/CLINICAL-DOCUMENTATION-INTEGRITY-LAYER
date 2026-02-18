@@ -177,21 +177,65 @@ class TestRoleBasedAccessControl:
 class TestReplayProtection:
     """Test that replay attacks are prevented."""
     
-    @pytest.mark.skip(reason="Requires nonce extraction from signature - TODO")
     def test_replay_attack_blocked(self):
         """
-        Test that resubmitting the same signature is blocked.
+        Test that resubmitting the same nonce is blocked.
         
-        Note: This test is complex because signatures are now opaque.
-        We would need to:
-        1. Issue a certificate
-        2. Extract the signature bundle
-        3. Try to create a new certificate with the same nonce
-        4. Verify it's rejected
-        
-        TODO: Implement this test properly.
+        This test verifies that the nonce-based replay protection works by:
+        1. Signing a message with a tenant ID (generates and records a nonce)
+        2. Extracting the nonce from the signature bundle
+        3. Attempting to reuse the same nonce (should fail)
         """
-        pass
+        from gateway.app.services.signer import sign_generic_message, check_and_record_nonce
+        
+        tenant_id = "hospital-replay-test"
+        test_message = {
+            "certificate_id": "test-cert-001",
+            "model_version": "gpt-4-turbo",
+            "note_hash": "abc123"
+        }
+        
+        # Step 1: Sign a message (this generates and records a nonce)
+        signature_bundle = sign_generic_message(test_message, tenant_id=tenant_id)
+        
+        # Step 2: Extract the nonce from the canonical_message
+        canonical_message = signature_bundle["canonical_message"]
+        assert "nonce" in canonical_message, "Nonce should be present in signature bundle"
+        used_nonce = canonical_message["nonce"]
+        
+        # Step 3: Attempt to reuse the same nonce (should fail)
+        # The check_and_record_nonce function returns False if nonce is already used
+        is_nonce_new = check_and_record_nonce(tenant_id, used_nonce)
+        
+        # Verify that the nonce is rejected (replay attack detected)
+        assert not is_nonce_new, "Reused nonce should be rejected"
+    
+    def test_nonce_isolation_between_tenants(self):
+        """
+        Test that nonces are isolated per tenant.
+        
+        A nonce used by tenant A should be allowed for tenant B
+        (nonces are scoped to tenants).
+        """
+        from gateway.app.services.signer import check_and_record_nonce
+        from gateway.app.services.uuid7 import generate_uuid7
+        
+        # Generate a unique nonce
+        shared_nonce = generate_uuid7()
+        
+        # Record nonce for tenant A
+        tenant_a = "hospital-a-replay"
+        is_new_a = check_and_record_nonce(tenant_a, shared_nonce)
+        assert is_new_a, "First use of nonce by tenant A should succeed"
+        
+        # Same nonce should be allowed for tenant B (different tenant)
+        tenant_b = "hospital-b-replay"
+        is_new_b = check_and_record_nonce(tenant_b, shared_nonce)
+        assert is_new_b, "Same nonce should be allowed for different tenant"
+        
+        # But reusing for tenant A should fail
+        is_new_a_again = check_and_record_nonce(tenant_a, shared_nonce)
+        assert not is_new_a_again, "Reused nonce for same tenant should be rejected"
 
 
 class TestSignatureIntegrity:
