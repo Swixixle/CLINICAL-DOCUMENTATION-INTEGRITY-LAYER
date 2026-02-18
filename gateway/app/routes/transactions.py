@@ -7,6 +7,7 @@ from typing import Dict, Any
 
 from gateway.app.services.storage import get_transaction
 from gateway.app.services.signer import verify_signature
+from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1/transactions", tags=["transactions"])
 
@@ -72,33 +73,23 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             # Hash leakage policy: return error code + prefixes only (first 16 chars)
             # Use error code instead of full hash values (security best practice)
             # Include only hash prefixes for debugging without leaking full cryptographic material
-            failure = {
-                "check": "halo_chain",
-                "error": "final_hash_mismatch"
-            }
-            # Optional debug fields with hash prefixes only
+            debug_info = None
             if stored_final_hash and recomputed_final_hash:
-                failure["debug"] = {
+                debug_info = {
                     "stored_prefix": stored_final_hash[:16],
                     "recomputed_prefix": recomputed_final_hash[:16]
                 }
-            failures.append(failure)
+            failures.append(fail("halo_chain", "final_hash_mismatch", debug_info))
     except Exception as e:
-        failures.append({
-            "check": "halo_chain",
-            "error": "recomputation_failed",
-            "debug": {"message": str(e)[:100]}
-        })
+        # Debug policy: exception type only (no full message to prevent information leakage)
+        failures.append(fail("halo_chain", "recomputation_failed", {"exception": type(e).__name__}))
     
     # Verify signature using key from packet's verification.key_id
     signature_bundle = packet.get("verification", {})
     key_id = signature_bundle.get("key_id")
     
     if not key_id:
-        failures.append({
-            "check": "signature",
-            "error": "missing_key_id"
-        })
+        failures.append(fail("signature", "missing_key_id"))
     else:
         # Look up key in database
         key = get_key(key_id)
@@ -113,16 +104,10 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                     with open(jwk_path, 'r') as f:
                         jwk = json.load(f)
                 except Exception:
-                    failures.append({
-                        "check": "signature",
-                        "error": "key_not_found_and_fallback_failed"
-                    })
+                    failures.append(fail("signature", "key_not_found_and_fallback_failed"))
                     jwk = None
             else:
-                failures.append({
-                    "check": "signature",
-                    "error": "key_not_found_in_prod"
-                })
+                failures.append(fail("signature", "key_not_found_in_prod"))
                 jwk = None
         else:
             jwk = key.get("jwk")
@@ -131,16 +116,10 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             try:
                 signature_valid = verify_signature(signature_bundle, jwk)
                 if not signature_valid:
-                    failures.append({
-                        "check": "signature",
-                        "error": "invalid_signature"
-                    })
+                    failures.append(fail("signature", "invalid_signature"))
             except Exception as e:
-                failures.append({
-                    "check": "signature",
-                    "error": "verification_failed",
-                    "debug": {"message": str(e)[:100]}
-                })
+                # Debug policy: exception type only (no full message to prevent information leakage)
+                failures.append(fail("signature", "verification_failed", {"exception": type(e).__name__}))
     
     valid = len(failures) == 0
     
