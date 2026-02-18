@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 
 from gateway.app.services.storage import get_transaction
-from gateway.app.services.halo import verify_halo_chain
 from gateway.app.services.signer import verify_signature
 
 router = APIRouter(prefix="/v1/transactions", tags=["transactions"])
@@ -113,7 +112,7 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                 try:
                     with open(jwk_path, 'r') as f:
                         jwk = json.load(f)
-                except:
+                except Exception:
                     failures.append({
                         "check": "signature",
                         "error": "key_not_found_and_fallback_failed"

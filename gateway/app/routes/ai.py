@@ -3,11 +3,11 @@ AI call endpoint for processing AI requests.
 """
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
-from gateway.app.models import AICallRequest, ModelRequest
+from gateway.app.models import AICallRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
 from gateway.app.services.packet_builder import build_accountability_packet
