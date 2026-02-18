@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Demo script for CDIL ROI Projection Endpoint
 # Usage: ./demo/roi_endpoint_demo.sh
 
