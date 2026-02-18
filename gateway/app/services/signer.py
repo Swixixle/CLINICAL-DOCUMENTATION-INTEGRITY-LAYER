@@ -183,46 +183,39 @@ def sign_message(message_obj: Dict[str, Any]) -> Dict[str, Any]:
 
 def sign_generic_message(
     message_obj: Dict[str, Any],
-    tenant_id: Optional[str] = None
+    tenant_id: str
 ) -> Dict[str, Any]:
     """
     Sign an arbitrary message object using per-tenant keys.
     
-    This is the primary signing function for certificates and should be used
-    for all new code. It includes:
-    - Per-tenant key isolation
-    - Nonce for replay protection (if tenant_id provided)
+    This is the primary signing function for certificates. It includes:
+    - Per-tenant key isolation (REQUIRED)
+    - Nonce for replay protection
     - Server timestamp
     - Key rotation support
     
     Args:
         message_obj: Dictionary to sign (will be canonicalized)
-        tenant_id: Tenant ID for per-tenant signing (optional, uses dev key if None)
+        tenant_id: Tenant ID for per-tenant signing (REQUIRED - no legacy fallback)
         
     Returns:
         Dictionary containing:
             - algorithm: Algorithm identifier
             - key_id: Key identifier
-            - canonical_message: Original message object (with nonce/timestamp if tenant_id)
+            - canonical_message: Original message object (with nonce/timestamp)
             - signature: Base64-encoded signature
+            
+    Raises:
+        ValueError: If tenant_id is None or empty (no legacy fallback allowed)
     """
-    # If no tenant_id, use legacy dev key
+    # Phase 5 security hardening: No legacy fallback
+    # tenant_id is REQUIRED for all signing operations
     if not tenant_id:
-        # Legacy path for backward compatibility
-        canonical_bytes = json_c14n_v1(message_obj)
-        private_key = _load_private_key()
-        signature = private_key.sign(
-            canonical_bytes,
-            ec.ECDSA(hashes.SHA256())
+        raise ValueError(
+            "tenant_id is required for signing operations. "
+            "Legacy fallback to dev key has been removed for security. "
+            "All certificates must use per-tenant keys."
         )
-        signature_b64 = base64.b64encode(signature).decode('utf-8')
-        
-        return {
-            "algorithm": "ECDSA_SHA_256",
-            "key_id": "dev-key-01",
-            "canonical_message": message_obj,
-            "signature": signature_b64
-        }
     
     # Get tenant's active key
     registry = get_key_registry()
