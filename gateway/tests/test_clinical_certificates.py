@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from gateway.app.main import app
 from gateway.app.db.migrate import ensure_schema
+from gateway.tests.auth_helpers import create_clinician_headers, create_auditor_headers
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +29,7 @@ def test_issue_certificate_minimal(client):
         "note_text": "Patient presents with mild fever and cough. Assessment: likely viral URI. Plan: rest and fluids.",
         "human_reviewed": True
     }
-    headers = {"X-Tenant-Id": "hospital-alpha"}
+    headers = create_clinician_headers("hospital-alpha")
     
     response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert response.status_code == 200
@@ -71,7 +72,7 @@ def test_issue_certificate_with_phi_fields(client):
         "patient_reference": "MRN-987654",
         "encounter_id": "enc-2026-02-18-001"
     }
-    headers = {"X-Tenant-Id": "hospital-beta"}
+    headers = create_clinician_headers("hospital-beta")
     
     response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert response.status_code == 200
@@ -95,7 +96,7 @@ def test_issue_certificate_with_phi_fields(client):
 def test_certificate_chain_linkage(client):
     """Test that certificates in the same tenant are properly chained."""
     tenant_id = "hospital-gamma"
-    headers = {"X-Tenant-Id": tenant_id}
+    headers = create_clinician_headers(tenant_id)
     
     # Issue first certificate
     request1 = {
@@ -138,7 +139,7 @@ def test_tenant_isolation(client):
         "note_text": "Note for tenant delta.",
         "human_reviewed": True
     }
-    headers_delta = {"X-Tenant-Id": "hospital-delta"}
+    headers_delta = create_clinician_headers("hospital-delta")
     
     response_delta = client.post("/v1/clinical/documentation", json=request_delta, headers=headers_delta)
     assert response_delta.status_code == 200
@@ -152,7 +153,7 @@ def test_tenant_isolation(client):
         "note_text": "Note for tenant epsilon.",
         "human_reviewed": True
     }
-    headers_epsilon = {"X-Tenant-Id": "hospital-epsilon"}
+    headers_epsilon = create_clinician_headers("hospital-epsilon")
     
     response_epsilon = client.post("/v1/clinical/documentation", json=request_epsilon, headers=headers_epsilon)
     assert response_epsilon.status_code == 200
@@ -176,7 +177,7 @@ def test_get_certificate(client):
         "note_text": "Test note for retrieval.",
         "human_reviewed": True
     }
-    headers = {"X-Tenant-Id": "hospital-zeta"}
+    headers = create_clinician_headers("hospital-zeta")
     
     issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
@@ -196,7 +197,7 @@ def test_get_certificate(client):
 
 def test_get_certificate_not_found(client):
     """Test retrieving a non-existent certificate."""
-    headers = {"X-Tenant-Id": "hospital-test"}
+    headers = create_clinician_headers("hospital-test")
     response = client.get("/v1/certificates/nonexistent-cert-id", headers=headers)
     assert response.status_code == 404
 
@@ -211,14 +212,15 @@ def test_verify_certificate_valid(client):
         "note_text": "Note for verification test.",
         "human_reviewed": True
     }
-    headers = {"X-Tenant-Id": "hospital-eta"}
+    headers = create_clinician_headers("hospital-eta")
     
     issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
     certificate_id = issue_response.json()["certificate_id"]
     
-    # Verify it
-    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=headers)
+    # Verify it (requires auditor role)
+    auditor_headers = create_auditor_headers("hospital-eta")
+    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=auditor_headers)
     assert verify_response.status_code == 200
     
     result = verify_response.json()
@@ -240,7 +242,7 @@ def test_verify_certificate_tampered(client):
         "note_text": "Note for tampering test.",
         "human_reviewed": True
     }
-    headers = {"X-Tenant-Id": "hospital-theta"}
+    headers = create_clinician_headers("hospital-theta")
     
     issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200
@@ -266,8 +268,9 @@ def test_verify_certificate_tampered(client):
     finally:
         conn.close()
     
-    # Verify the tampered certificate
-    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=headers)
+    # Verify the tampered certificate (requires auditor role)
+    auditor_headers = create_auditor_headers("hospital-theta")
+    verify_response = client.post(f"/v1/certificates/{certificate_id}/verify", headers=auditor_headers)
     assert verify_response.status_code == 200
     
     result = verify_response.json()
@@ -283,7 +286,7 @@ def test_verify_certificate_tampered(client):
 
 def test_verify_certificate_not_found(client):
     """Test verifying a non-existent certificate."""
-    headers = {"X-Tenant-Id": "hospital-test"}
+    headers = create_auditor_headers("hospital-test")
     response = client.post("/v1/certificates/nonexistent-cert-id/verify", headers=headers)
     assert response.status_code == 404
 
@@ -303,7 +306,7 @@ def test_no_plaintext_phi_in_storage(client):
         "human_reviewer_id": "SENSITIVE_REVIEWER_ID_67890",
         "patient_reference": "SENSITIVE_PATIENT_MRN_11111"
     }
-    headers = {"X-Tenant-Id": "hospital-iota"}
+    headers = create_clinician_headers("hospital-iota")
     
     issue_response = client.post("/v1/clinical/documentation", json=request, headers=headers)
     assert issue_response.status_code == 200

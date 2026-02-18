@@ -4,6 +4,8 @@ Tests for timing integrity (finalization gate) feature.
 
 import pytest
 from fastapi.testclient import TestClient
+
+from gateway.tests.auth_helpers import create_clinician_headers, create_auditor_headers
 from pathlib import Path
 import tempfile
 import shutil
@@ -45,7 +47,6 @@ def test_timing_integrity_backdating_detected(client):
     """Test that backdating is detected when finalized_at > ehr_referenced_at."""
     # Issue a certificate
     request = {
-        "tenant_id": "timing-test-hospital",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -53,7 +54,7 @@ def test_timing_integrity_backdating_detected(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-test-hospital"))
     assert response.status_code == 200
     
     cert_data = response.json()
@@ -91,7 +92,7 @@ def test_timing_integrity_backdating_detected(client):
     # Verify the certificate - should fail timing check
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers={"X-Tenant-Id": "timing-test-hospital"}
+        headers=create_auditor_headers("timing-test-hospital")
     )
     assert verify_response.status_code == 200
     
@@ -114,7 +115,6 @@ def test_timing_integrity_valid_sequence(client):
     """Test that valid timing sequence passes verification."""
     # Issue a certificate
     request = {
-        "tenant_id": "timing-valid-hospital",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -122,7 +122,7 @@ def test_timing_integrity_valid_sequence(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-test-hospital"))
     assert response.status_code == 200
     
     cert_id = response.json()["certificate_id"]
@@ -154,7 +154,7 @@ def test_timing_integrity_valid_sequence(client):
     # Verify the certificate - should pass
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers={"X-Tenant-Id": "timing-valid-hospital"}
+        headers=create_auditor_headers("timing-valid-hospital")
     )
     assert verify_response.status_code == 200
     
@@ -170,7 +170,6 @@ def test_timing_integrity_no_ehr_reference(client):
     """Test that certificate without ehr_referenced_at still passes."""
     # Issue a certificate
     request = {
-        "tenant_id": "timing-no-ref-hospital",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -178,7 +177,7 @@ def test_timing_integrity_no_ehr_reference(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-no-ref-hospital"))
     assert response.status_code == 200
     
     cert_id = response.json()["certificate_id"]
@@ -186,7 +185,7 @@ def test_timing_integrity_no_ehr_reference(client):
     # Verify without setting ehr_referenced_at
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers={"X-Tenant-Id": "timing-no-ref-hospital"}
+        headers=create_auditor_headers("timing-no-ref-hospital")
     )
     assert verify_response.status_code == 200
     
@@ -201,7 +200,6 @@ def test_timing_integrity_no_ehr_reference(client):
 def test_certificate_includes_governance_fields(client):
     """Test that new governance fields are included in certificate."""
     request = {
-        "tenant_id": "gov-fields-hospital",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v2.0",
@@ -209,7 +207,7 @@ def test_certificate_includes_governance_fields(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request)
+    response = client.post("/v1/clinical/documentation", json=request, headers=create_clinician_headers("timing-test-hospital"))
     assert response.status_code == 200
     
     certificate = response.json()["certificate"]

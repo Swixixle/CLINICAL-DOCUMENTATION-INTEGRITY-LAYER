@@ -9,6 +9,8 @@ Tests critical security boundaries identified in THREAT_MODEL_AND_TRUST_GUARANTE
 
 import pytest
 from fastapi.testclient import TestClient
+
+from gateway.tests.auth_helpers import create_clinician_headers, create_auditor_headers
 from pathlib import Path
 import tempfile
 import shutil
@@ -59,7 +61,6 @@ def test_cross_tenant_read_isolation(client):
     """
     # Issue certificate for tenant A
     request_data_a = {
-        "tenant_id": "tenant-hospital-alpha",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v1.0",
         "governance_policy_version": "clinical-v1",
@@ -68,14 +69,14 @@ def test_cross_tenant_read_isolation(client):
         "encounter_id": "ENC-ALPHA-001"
     }
     
-    response_a = client.post("/v1/clinical/documentation", json=request_data_a)
+    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("tenant-hospital-alpha"))
     assert response_a.status_code == 200
     cert_a_id = response_a.json()["certificate_id"]
     
     # Verify tenant A can retrieve their own certificate
     get_response_a = client.get(
         f"/v1/certificates/{cert_a_id}",
-        headers={"X-Tenant-Id": "tenant-hospital-alpha"}
+        headers=create_clinician_headers("tenant-hospital-alpha")
     )
     assert get_response_a.status_code == 200
     assert get_response_a.json()["tenant_id"] == "tenant-hospital-alpha"
@@ -83,7 +84,7 @@ def test_cross_tenant_read_isolation(client):
     # Attempt to retrieve tenant A's cert with tenant B's auth
     get_response_b = client.get(
         f"/v1/certificates/{cert_a_id}",
-        headers={"X-Tenant-Id": "tenant-hospital-beta"}
+        headers=create_clinician_headers("tenant-hospital-beta")
     )
     
     # Must return 404 (not 403) to avoid revealing existence
@@ -99,7 +100,6 @@ def test_cross_tenant_verify_isolation(client):
     """
     # Issue certificate for tenant A
     request_data_a = {
-        "tenant_id": "tenant-clinic-gamma",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v1.0",
         "governance_policy_version": "clinical-v1",
@@ -108,14 +108,14 @@ def test_cross_tenant_verify_isolation(client):
         "encounter_id": "ENC-GAMMA-001"
     }
     
-    response_a = client.post("/v1/clinical/documentation", json=request_data_a)
+    response_a = client.post("/v1/clinical/documentation", json=request_data_a, headers=create_clinician_headers("tenant-clinic-gamma"))
     assert response_a.status_code == 200
     cert_a_id = response_a.json()["certificate_id"]
     
     # Verify tenant A can verify their own certificate
     verify_response_a = client.post(
         f"/v1/certificates/{cert_a_id}/verify",
-        headers={"X-Tenant-Id": "tenant-clinic-gamma"}
+        headers=create_auditor_headers("tenant-clinic-gamma")
     )
     assert verify_response_a.status_code == 200
     assert verify_response_a.json()["valid"] == True
@@ -123,7 +123,7 @@ def test_cross_tenant_verify_isolation(client):
     # Attempt to verify tenant A's cert with tenant B's auth
     verify_response_b = client.post(
         f"/v1/certificates/{cert_a_id}/verify",
-        headers={"X-Tenant-Id": "tenant-clinic-delta"}
+        headers=create_clinician_headers("tenant-clinic-delta")
     )
     
     # Must return 404 to avoid revealing existence
@@ -139,7 +139,6 @@ def test_missing_tenant_header_rejected(client):
     """
     # Issue certificate first
     request_data = {
-        "tenant_id": "tenant-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -147,7 +146,7 @@ def test_missing_tenant_header_rejected(client):
         "human_reviewed": False
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 200
     cert_id = response.json()["certificate_id"]
     
@@ -169,7 +168,6 @@ def test_phi_pattern_detection_ssn(client):
     Security requirement: PHI pattern detection must reject obvious PHI.
     """
     request_data = {
-        "tenant_id": "tenant-phi-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -177,7 +175,7 @@ def test_phi_pattern_detection_ssn(client):
         "human_reviewed": False
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
     assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
     assert "ssn" in response.json()["detail"]["detected_patterns"]
@@ -190,7 +188,6 @@ def test_phi_pattern_detection_phone(client):
     Security requirement: PHI pattern detection must reject phone numbers.
     """
     request_data = {
-        "tenant_id": "tenant-phi-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -198,7 +195,7 @@ def test_phi_pattern_detection_phone(client):
         "human_reviewed": False
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
     assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
     assert "phone" in response.json()["detail"]["detected_patterns"]
@@ -211,7 +208,6 @@ def test_phi_pattern_detection_email(client):
     Security requirement: PHI pattern detection must reject email addresses.
     """
     request_data = {
-        "tenant_id": "tenant-phi-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -219,7 +215,7 @@ def test_phi_pattern_detection_email(client):
         "human_reviewed": False
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 400
     assert "phi_detected_in_note_text" in response.json()["detail"]["error"]
     assert "email" in response.json()["detail"]["detected_patterns"]
@@ -234,7 +230,6 @@ def test_note_text_never_persisted(client, test_db):
     sensitive_note_text = "Extremely sensitive clinical information about patient condition."
     
     request_data = {
-        "tenant_id": "tenant-storage-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -244,7 +239,7 @@ def test_note_text_never_persisted(client, test_db):
         "human_reviewer_id": "DR-SENSITIVE-ID"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 200
     
     # Directly inspect database
@@ -274,7 +269,6 @@ def test_patient_and_reviewer_hashed(client):
     Security requirement: All PHI fields must be hashed.
     """
     request_data = {
-        "tenant_id": "tenant-hash-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -284,7 +278,7 @@ def test_patient_and_reviewer_hashed(client):
         "human_reviewer_id": "DR-HASH-TEST-001"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 200
     
     cert = response.json()["certificate"]
@@ -311,7 +305,6 @@ def test_chain_integrity_per_tenant(client):
     """
     # Issue first cert for tenant A
     request_a1 = {
-        "tenant_id": "tenant-chain-alpha",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -328,7 +321,6 @@ def test_chain_integrity_per_tenant(client):
     
     # Issue first cert for tenant B
     request_b1 = {
-        "tenant_id": "tenant-chain-beta",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -345,7 +337,6 @@ def test_chain_integrity_per_tenant(client):
     
     # Issue second cert for tenant A
     request_a2 = {
-        "tenant_id": "tenant-chain-alpha",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -371,7 +362,6 @@ def test_signature_verification_valid(client):
     Security requirement: Cryptographic integrity validation.
     """
     request_data = {
-        "tenant_id": "tenant-sig-test",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -379,14 +369,14 @@ def test_signature_verification_valid(client):
         "human_reviewed": True
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=create_clinician_headers("test-tenant"))
     assert response.status_code == 200
     cert_id = response.json()["certificate_id"]
     
     # Verify certificate
     verify_response = client.post(
         f"/v1/certificates/{cert_id}/verify",
-        headers={"X-Tenant-Id": "tenant-sig-test"}
+        headers=create_clinician_headers("tenant-sig-test")
     )
     
     assert verify_response.status_code == 200
@@ -405,7 +395,6 @@ def test_query_certificates_tenant_isolation(client):
     """
     # Issue cert for tenant A
     request_a = {
-        "tenant_id": "tenant-query-alpha",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -419,7 +408,6 @@ def test_query_certificates_tenant_isolation(client):
     
     # Issue cert for tenant B
     request_b = {
-        "tenant_id": "tenant-query-beta",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",

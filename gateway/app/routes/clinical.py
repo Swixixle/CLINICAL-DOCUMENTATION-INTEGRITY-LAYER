@@ -293,7 +293,8 @@ async def issue_certificate(
         "signature": {
             "key_id": signature_bundle["key_id"],
             "algorithm": signature_bundle["algorithm"],
-            "signature": signature_bundle["signature"]
+            "signature": signature_bundle["signature"],
+            "canonical_message": signature_bundle["canonical_message"]
         }
     }
     
