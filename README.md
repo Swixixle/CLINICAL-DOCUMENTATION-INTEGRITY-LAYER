@@ -60,7 +60,8 @@ EHR
 2. Governance metadata captured (model, policy version, parameters).
 3. Final note content hashed.
 4. Certificate generated and cryptographically signed.
-5. Note + certificate stored in EHR.
+5. CDIL returns certificate to AI Documentation System.
+6. Note + certificate stored in EHR by AI Documentation System.
 
 **Key properties:**
 
@@ -97,7 +98,7 @@ EHR
 * `governance_policy_version`: Active governance policy at finalization
 * `note_hash`: SHA-256 hash of finalized note content
 * `patient_hash`: SHA-256 hash of patient identifier (not plaintext)
-* `encounter_id`: Clinical encounter reference (non-PHI identifier)
+* `encounter_id`: Clinical encounter reference (application-assigned identifier, not direct PHI)
 * `timestamp`: Certificate issuance timestamp (ISO 8601 UTC)
 * `human_reviewed`: Boolean flag indicating human review status
 * `signature`: Cryptographic signature (ECDSA-SHA256)
