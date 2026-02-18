@@ -100,7 +100,13 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     """
     Update a transaction packet in the database.
     
-    This is primarily used for testing tampering scenarios.
+    ⚠️ TESTING-ONLY FUNCTION ⚠️
+    This function is intended solely for testing tampering scenarios.
+    It must NEVER be used by normal application routes.
+    
+    CRITICAL INVARIANT: This function persists the packet blob EXACTLY as provided.
+    It does NOT recompute, normalize, or derive ANY packet fields.
+    It only extracts indexed fields from the provided packet for query optimization.
     
     CRITICAL INVARIANTS:
     - Stores JSON blob exactly as provided (no field recomputation)
@@ -116,6 +122,12 @@ def update_transaction(transaction_id: str, packet: Dict[str, Any]) -> None:
     packet_json = json.dumps(packet, sort_keys=True)
     
     # Extract indexed field from packet (read-only, no modification)
+        packet: Updated accountability packet dictionary (used as-is, no modifications)
+    """
+    # Serialize packet exactly as provided - NO MODIFICATIONS
+    packet_json = json.dumps(packet, sort_keys=True)
+    
+    # Extract indexed fields from the provided packet (not recomputed)
     final_hash = packet["halo_chain"]["final_hash"]
     
     conn = get_connection()

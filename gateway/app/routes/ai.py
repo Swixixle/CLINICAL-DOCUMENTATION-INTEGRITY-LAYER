@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 from gateway.app.models import AICallRequest, ModelRequest
+from gateway.app.models import AICallRequest
 from gateway.app.services.policy_engine import evaluate_request
 from gateway.app.services.ai_adapter import execute
 from gateway.app.services.packet_builder import build_accountability_packet
@@ -64,8 +65,10 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     
     # Step 3: Evaluate policy (pre-execution)
     policy_request = {
+        "provider": request.model_request.provider if request.model_request else "openai",
         "model": model,
         "temperature": temperature,
+        "max_tokens": request.model_request.max_tokens if request.model_request else 2048,
         "feature_tag": request.feature_tag,
         "network_access": request.network_access,
         "tool_permissions": request.tool_permissions,
