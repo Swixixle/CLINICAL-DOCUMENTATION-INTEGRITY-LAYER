@@ -22,7 +22,7 @@ Request models for AI calls.
 """
 
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Literal
 
 
 class ModelRequest(BaseModel):
@@ -49,7 +49,7 @@ class AICallRequest(BaseModel):
     3. Feed into the accountability packet for auditability
     """
     # Core fields (Phase 2 canonical request contract)
-    environment: str = Field(..., description="Environment: prod, staging, or dev (REQUIRED)")
+    environment: Literal["prod", "staging", "dev"] = Field(..., description="Environment: prod, staging, or dev (REQUIRED)")
     client_id: str = Field(..., description="Client identifier (REQUIRED)")
     feature_tag: str = Field(..., description="Feature tag (e.g., billing, customer-support)")
     user_ref: str = Field(default="system", description="User reference")
