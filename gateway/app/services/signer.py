@@ -92,7 +92,7 @@ def check_and_record_nonce(tenant_id: str, nonce: str) -> bool:
     
     Args:
         tenant_id: Tenant identifier
-        nonce: Nonce string (should be UUID4)
+        nonce: Nonce string (UUID7 - time-ordered, globally unique)
         
     Returns:
         True if nonce is new (recorded successfully), False if already used
