@@ -89,7 +89,10 @@ def test_timing_integrity_backdating_detected(client):
         conn.close()
     
     # Verify the certificate - should fail timing check
-    verify_response = client.post(f"/v1/certificates/{cert_id}/verify")
+    verify_response = client.post(
+        f"/v1/certificates/{cert_id}/verify",
+        headers={"X-Tenant-Id": "timing-test-hospital"}
+    )
     assert verify_response.status_code == 200
     
     verify_data = verify_response.json()
@@ -149,7 +152,10 @@ def test_timing_integrity_valid_sequence(client):
         conn.close()
     
     # Verify the certificate - should pass
-    verify_response = client.post(f"/v1/certificates/{cert_id}/verify")
+    verify_response = client.post(
+        f"/v1/certificates/{cert_id}/verify",
+        headers={"X-Tenant-Id": "timing-valid-hospital"}
+    )
     assert verify_response.status_code == 200
     
     verify_data = verify_response.json()
@@ -178,7 +184,10 @@ def test_timing_integrity_no_ehr_reference(client):
     cert_id = response.json()["certificate_id"]
     
     # Verify without setting ehr_referenced_at
-    verify_response = client.post(f"/v1/certificates/{cert_id}/verify")
+    verify_response = client.post(
+        f"/v1/certificates/{cert_id}/verify",
+        headers={"X-Tenant-Id": "timing-no-ref-hospital"}
+    )
     assert verify_response.status_code == 200
     
     verify_data = verify_response.json()
