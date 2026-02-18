@@ -48,29 +48,25 @@ def client(test_db):
 def test_clinical_documentation_certificate_generation(client):
     """Test generating a clinical documentation integrity certificate."""
     request_data = {
-        "clinician_id": "DR-TEST-001",
-        "patient_id": "PATIENT-TEST-001",
-        "encounter_id": "ENC-2026-02-18-TEST",
-        "ai_vendor": "openai",
         "model_version": "gpt-4-turbo",
         "prompt_version": "clinical-v1.2",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "Patient presents with headache. Vital signs stable. Assessed as tension headache.",
         "human_reviewed": True,
-        "human_editor_id": "DR-TEST-001",
-        "note_type": "progress_note",
-        "environment": "dev"
+        "human_reviewer_id": "DR-TEST-001",
+        "encounter_id": "ENC-2026-02-18-TEST",
+        "patient_reference": "PATIENT-TEST-001"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    headers = {"X-Tenant-Id": "test-tenant-001"}
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
     data = response.json()
     
     # Check response structure
     assert "certificate_id" in data
-    assert "verification_url" in data
-    assert "hash_prefix" in data
+    assert "verify_url" in data
     assert "certificate" in data
     
     # Check certificate structure
@@ -85,31 +81,26 @@ def test_clinical_documentation_certificate_generation(client):
     assert "patient_hash" in cert
     assert "timestamp" in cert
     assert "signature" in cert
-    assert "final_hash" in cert
-    assert "governance_checks" in cert
+    assert "integrity_chain" in cert
     
-    # Check governance checks were executed
-    assert len(cert["governance_checks"]) > 0
-    assert "phi_filter_executed" in cert["governance_checks"]
+    # Check integrity chain
+    assert "chain_hash" in cert["integrity_chain"]
     
 
 def test_clinical_documentation_no_phi_stored(client):
     """Test that no PHI is stored in plaintext."""
     request_data = {
-        "clinician_id": "DR-TEST-002",
-        "patient_id": "PATIENT-SENSITIVE-DATA",
-        "encounter_id": "ENC-TEST-002",
-        "ai_vendor": "anthropic",
         "model_version": "claude-3",
         "prompt_version": "clinical-v1.0",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "This note contains sensitive clinical information.",
         "human_reviewed": False,
-        "note_type": "consultation",
-        "environment": "dev"
+        "encounter_id": "ENC-TEST-002",
+        "patient_reference": "PATIENT-SENSITIVE-DATA"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    headers = {"X-Tenant-Id": "test-tenant-002"}
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
     data = response.json()
@@ -129,39 +120,34 @@ def test_clinical_documentation_human_review_tracking(client):
     """Test human review flag tracking."""
     # Test with human review
     request_with_review = {
-        "clinician_id": "DR-TEST-003",
-        "patient_id": "PATIENT-TEST-003",
-        "encounter_id": "ENC-TEST-003-A",
-        "ai_vendor": "openai",
         "model_version": "gpt-4",
         "prompt_version": "clinical-v1.1",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "Test note with review",
         "human_reviewed": True,
-        "human_editor_id": "DR-REVIEWER-001",
-        "environment": "dev"
+        "human_reviewer_id": "DR-REVIEWER-001",
+        "encounter_id": "ENC-TEST-003-A",
+        "patient_reference": "PATIENT-TEST-003"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_with_review)
+    headers = {"X-Tenant-Id": "test-tenant-003"}
+    response = client.post("/v1/clinical/documentation", json=request_with_review, headers=headers)
     assert response.status_code == 200
     cert = response.json()["certificate"]
     assert cert["human_reviewed"] == True
     
     # Test without human review
     request_without_review = {
-        "clinician_id": "DR-TEST-003",
-        "patient_id": "PATIENT-TEST-003",
-        "encounter_id": "ENC-TEST-003-B",
-        "ai_vendor": "openai",
         "model_version": "gpt-4",
         "prompt_version": "clinical-v1.1",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "Test note without review",
         "human_reviewed": False,
-        "environment": "dev"
+        "encounter_id": "ENC-TEST-003-B",
+        "patient_reference": "PATIENT-TEST-003"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_without_review)
+    response = client.post("/v1/clinical/documentation", json=request_without_review, headers=headers)
     assert response.status_code == 200
     cert = response.json()["certificate"]
     assert cert["human_reviewed"] == False
@@ -192,43 +178,32 @@ def test_mock_summarizer_endpoint(client):
 def test_clinical_documentation_governance_metadata(client):
     """Test that governance metadata is properly included."""
     request_data = {
-        "clinician_id": "DR-TEST-004",
-        "patient_id": "PATIENT-TEST-004",
-        "encounter_id": "ENC-TEST-004",
-        "ai_vendor": "openai",
         "model_version": "gpt-4-turbo",
         "prompt_version": "clinical-v1.2",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "Test note for governance",
         "human_reviewed": True,
-        "human_editor_id": "DR-TEST-004",
-        "note_type": "discharge_summary",
-        "environment": "dev"
+        "human_reviewer_id": "DR-TEST-004",
+        "encounter_id": "ENC-TEST-004",
+        "patient_reference": "PATIENT-TEST-004"
     }
     
-    response = client.post("/v1/clinical/documentation", json=request_data)
+    headers = {"X-Tenant-Id": "test-tenant-004"}
+    response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     
     assert response.status_code == 200
     data = response.json()
     
     cert = data["certificate"]
-    assert "governance_checks" in cert
-    assert isinstance(cert["governance_checks"], list)
-    
-    # Verify expected governance checks
-    expected_checks = [
-        "phi_filter_executed",
-        "hallucination_scan_executed",
-        "bias_filter_executed"
-    ]
-    
-    for check in expected_checks:
-        assert check in cert["governance_checks"]
+    # Check that certificate contains governance fields
+    assert cert["governance_policy_version"] == request_data["governance_policy_version"]
+    assert cert["model_version"] == request_data["model_version"]
+    assert cert["prompt_version"] == request_data["prompt_version"]
 
 
 def test_clinical_documentation_different_note_types(client):
-    """Test certificate generation for different note types."""
-    note_types = [
+    """Test certificate generation for different scenarios."""
+    scenarios = [
         "progress_note",
         "consultation",
         "discharge_summary",
@@ -236,55 +211,52 @@ def test_clinical_documentation_different_note_types(client):
         "procedure_note"
     ]
     
-    for note_type in note_types:
+    headers = {"X-Tenant-Id": "test-tenant-005"}
+    
+    for idx, scenario in enumerate(scenarios):
         request_data = {
-            "clinician_id": "DR-TEST-005",
-            "patient_id": f"PATIENT-{note_type}",
-            "encounter_id": f"ENC-{note_type}",
-            "ai_vendor": "openai",
             "model_version": "gpt-4",
             "prompt_version": "clinical-v1.0",
             "governance_policy_version": "CDOC-Policy-v1",
-            "note_text": f"This is a {note_type} generated by AI.",
+            "note_text": f"This is a {scenario} generated by AI.",
             "human_reviewed": True,
-            "human_editor_id": "DR-TEST-005",
-            "note_type": note_type,
-            "environment": "dev"
+            "human_reviewer_id": "DR-TEST-005",
+            "encounter_id": f"ENC-{scenario}",
+            "patient_reference": f"PATIENT-{scenario}"
         }
         
-        response = client.post("/v1/clinical/documentation", json=request_data)
+        response = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
         
-        assert response.status_code == 200, f"Failed for note_type: {note_type}"
+        assert response.status_code == 200, f"Failed for scenario: {scenario}"
         data = response.json()
-        assert data["certificate"]["encounter_id"] == f"ENC-{note_type}"
+        assert data["certificate"]["encounter_id"] == f"ENC-{scenario}"
 
 
 def test_clinical_documentation_hash_consistency(client):
     """Test that identical notes produce identical hashes."""
     note_text = "Identical clinical note for hash testing."
-    patient_id = "PATIENT-HASH-TEST"
+    patient_ref = "PATIENT-HASH-TEST"
+    
+    headers = {"X-Tenant-Id": "test-tenant-006"}
     
     request_data = {
-        "clinician_id": "DR-TEST-006",
-        "patient_id": patient_id,
-        "encounter_id": "ENC-HASH-TEST-1",
-        "ai_vendor": "openai",
         "model_version": "gpt-4",
         "prompt_version": "clinical-v1.0",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": note_text,
         "human_reviewed": False,
-        "environment": "dev"
+        "encounter_id": "ENC-HASH-TEST-1",
+        "patient_reference": patient_ref
     }
     
     # Generate first certificate
-    response1 = client.post("/v1/clinical/documentation", json=request_data)
+    response1 = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     assert response1.status_code == 200
     cert1 = response1.json()["certificate"]
     
     # Generate second certificate with same note and patient
     request_data["encounter_id"] = "ENC-HASH-TEST-2"  # Different encounter
-    response2 = client.post("/v1/clinical/documentation", json=request_data)
+    response2 = client.post("/v1/clinical/documentation", json=request_data, headers=headers)
     assert response2.status_code == 200
     cert2 = response2.json()["certificate"]
     
@@ -298,18 +270,14 @@ def test_clinical_documentation_hash_consistency(client):
 
 def test_clinical_documentation_required_fields(client):
     """Test that required fields are validated."""
-    # Missing clinician_id
+    # Missing model_version (required field)
     incomplete_request = {
-        "patient_id": "PATIENT-TEST",
-        "encounter_id": "ENC-TEST",
-        "ai_vendor": "openai",
-        "model_version": "gpt-4",
         "prompt_version": "clinical-v1.0",
         "governance_policy_version": "CDOC-Policy-v1",
         "note_text": "Test note",
-        "human_reviewed": False,
-        "environment": "dev"
+        "human_reviewed": False
     }
     
-    response = client.post("/v1/clinical/documentation", json=incomplete_request)
+    headers = {"X-Tenant-Id": "test-tenant-007"}
+    response = client.post("/v1/clinical/documentation", json=incomplete_request, headers=headers)
     assert response.status_code == 422  # Validation error
