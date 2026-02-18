@@ -18,6 +18,7 @@ from gateway.app.models.clinical import (
 from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import sign_generic_message, verify_signature
+from gateway.app.services.verification_interpreter import interpret_verification
 from gateway.app.routes.verify_utils import fail
 
 router = APIRouter(prefix="/v1", tags=["clinical-documentation"])
@@ -393,8 +394,17 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
     
     valid = len(failures) == 0
     
+    # Generate human-friendly interpretation
+    human_friendly_report = interpret_verification(
+        failures=failures,
+        valid=valid,
+        certificate_id=certificate_id,
+        timestamp=certificate.get("timestamp")
+    )
+    
     return {
         "certificate_id": certificate_id,
         "valid": valid,
-        "failures": failures
+        "failures": failures,
+        "human_friendly_report": human_friendly_report
     }
