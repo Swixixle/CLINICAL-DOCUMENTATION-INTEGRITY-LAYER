@@ -382,18 +382,17 @@ async def verify_certificate(
     Verifies:
     1. Certificate exists
     2. Certificate belongs to requesting tenant
-    Requires X-Tenant-Id header for tenant isolation.
     
     Verifies:
     1. Certificate exists and belongs to tenant
     2. Timing integrity (if ehr_referenced_at is set)
     3. Chain hash is valid (recomputes from stored fields)
-    4. Signature is valid
+    4. Signature is valid using per-tenant key
     
     Args:
+        request: FastAPI request (for rate limiting)
         certificate_id: Certificate identifier
-        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
-        x_tenant_id: Tenant ID from X-Tenant-Id header
+        identity: Authenticated identity (injected by JWT dependency)
         
     Returns:
         Verification result with:
@@ -409,16 +408,9 @@ async def verify_certificate(
     import json
     from gateway.app.db.migrate import get_connection
     from gateway.app.services.signer import verify_signature
-    from gateway.app.services.storage import get_key
     
-    if not x_tenant_id:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "missing_tenant_id",
-                "message": "X-Tenant-Id header is required"
-            }
-        )
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
     
     # Load certificate
     conn = get_connection()
@@ -432,23 +424,13 @@ async def verify_certificate(
         
         # Return 404 if not found (don't reveal existence)
         if not row:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         # Return 404 for cross-tenant access (don't reveal existence to other tenants)
-        if row['tenant_id'] != x_tenant_id:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        if row['tenant_id'] != tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         certificate = json.loads(row['certificate_json'])
-        
-        # Enforce tenant isolation
-        if certificate.get("tenant_id") != x_tenant_id:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "tenant_mismatch",
-                    "message": "Certificate not found"  # Don't reveal existence to other tenants
-                }
-            )
     finally:
         conn.close()
     
@@ -500,40 +482,46 @@ async def verify_certificate(
     except Exception as e:
         failures.append(fail("integrity_chain", "recomputation_failed", {"exception": type(e).__name__}))
     
-    # Verify signature
+    # Verify signature using per-tenant key
     signature_bundle = certificate.get("signature", {})
     key_id = signature_bundle.get("key_id")
     
     if not key_id:
         failures.append(fail("signature", "missing_key_id"))
     else:
-        # Look up key in database
-        key = get_key(key_id)
+        # Look up key from tenant key registry
+        registry = get_key_registry()
+        key_data = registry.get_key_by_id(tenant_id, key_id)
         
-        if not key:
-            # Fallback to dev JWK
+        if not key_data:
+            # Fallback to legacy dev key for backward compatibility
             from pathlib import Path
             jwk_path = Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
             try:
                 with open(jwk_path, 'r') as f:
                     jwk = json.load(f)
             except Exception:
-                failures.append(fail("signature", "key_not_found_and_fallback_failed"))
+                failures.append(fail("signature", "key_not_found"))
                 jwk = None
         else:
-            jwk = key.get("jwk")
+            jwk = key_data.get("public_jwk")
         
         if jwk:
             try:
                 # Reconstruct canonical message for verification
-                canonical_message = {
-                    "certificate_id": certificate["certificate_id"],
-                    "tenant_id": certificate["tenant_id"],
-                    "timestamp": certificate["timestamp"],
-                    "chain_hash": certificate["integrity_chain"]["chain_hash"],
-                    "note_hash": certificate["note_hash"],
-                    "governance_policy_version": certificate["governance_policy_version"]
-                }
+                # Check if this is a new-style signature (with nonce/timestamp)
+                canonical_message = signature_bundle.get("canonical_message")
+                
+                if not canonical_message:
+                    # Legacy format: reconstruct from certificate fields
+                    canonical_message = {
+                        "certificate_id": certificate["certificate_id"],
+                        "tenant_id": certificate["tenant_id"],
+                        "timestamp": certificate["timestamp"],
+                        "chain_hash": certificate["integrity_chain"]["chain_hash"],
+                        "note_hash": certificate["note_hash"],
+                        "governance_policy_version": certificate["governance_policy_version"]
+                    }
                 
                 # Build signature bundle for verification
                 sig_bundle = {
@@ -568,27 +556,31 @@ async def verify_certificate(
 
 
 @router.get("/certificates/{certificate_id}/pdf")
+@limiter.limit("100/minute")  # Rate limit: 100 PDF generations per minute
 async def get_certificate_pdf(
+    request: Request,  # Required for rate limiting
     certificate_id: str,
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+    identity: Identity = Depends(get_current_identity)
 ) -> Response:
     """
     Generate and return certificate as a formal PDF document.
     
-    Requires X-Tenant-Id header for tenant isolation.
+    SECURITY: Requires JWT authentication.
+    Enforces tenant isolation.
     
     Args:
+        request: FastAPI request (for rate limiting)
         certificate_id: Certificate identifier
-        x_tenant_id: Tenant ID from X-Tenant-Id header
+        identity: Authenticated identity (injected by JWT dependency)
         
     Returns:
         PDF file as application/pdf
     """
-    if not x_tenant_id:
-        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
-    
     import json
     from gateway.app.db.migrate import get_connection
+    
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
     
     # Load certificate with tenant check
     conn = get_connection()
@@ -601,18 +593,18 @@ async def get_certificate_pdf(
         row = cursor.fetchone()
         
         if not row:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         certificate = json.loads(row['certificate_json'])
         
         # Enforce tenant isolation
-        if certificate.get("tenant_id") != x_tenant_id:
-            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
+        if certificate.get("tenant_id") != tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
     finally:
         conn.close()
     
-    # Verify certificate to get status (with tenant header)
-    verification_result = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
+    # Verify certificate to get status
+    verification_result = await verify_certificate(request, certificate_id, identity=identity)
     valid = verification_result.get("valid", False)
     
     # Generate PDF
@@ -629,14 +621,17 @@ async def get_certificate_pdf(
 
 
 @router.get("/certificates/{certificate_id}/bundle")
+@limiter.limit("100/minute")  # Rate limit: 100 bundle generations per minute
 async def get_evidence_bundle(
+    request: Request,  # Required for rate limiting
     certificate_id: str,
-    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
+    identity: Identity = Depends(get_current_identity)
 ) -> Response:
     """
     Generate and return complete evidence bundle as ZIP archive.
     
-    Requires X-Tenant-Id header for tenant isolation.
+    SECURITY: Requires JWT authentication.
+    Enforces tenant isolation.
     
     Bundle contains:
     - certificate.json
@@ -645,17 +640,18 @@ async def get_evidence_bundle(
     - README_VERIFICATION.txt
     
     Args:
+        request: FastAPI request (for rate limiting)
         certificate_id: Certificate identifier
-        x_tenant_id: Tenant ID from X-Tenant-Id header
+        identity: Authenticated identity (injected by JWT dependency)
         
     Returns:
         ZIP file as application/zip
     """
-    if not x_tenant_id:
-        raise HTTPException(status_code=400, detail={"error": "missing_tenant_id", "message": "X-Tenant-Id header is required"})
-    
     import json
     from gateway.app.db.migrate import get_connection
+    
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
     
     # Load certificate with tenant check
     conn = get_connection()
@@ -668,18 +664,18 @@ async def get_evidence_bundle(
         row = cursor.fetchone()
         
         if not row:
-            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
         
         certificate = json.loads(row['certificate_json'])
         
         # Enforce tenant isolation
-        if certificate.get("tenant_id") != x_tenant_id:
-            raise HTTPException(status_code=404, detail={"error": "tenant_mismatch", "message": "Certificate not found"})
+        if certificate.get("tenant_id") != tenant_id:
+            raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Certificate not found"})
     finally:
         conn.close()
     
-    # Verify certificate (with tenant header)
-    verification_report = await verify_certificate(certificate_id, x_tenant_id=x_tenant_id)
+    # Verify certificate
+    verification_report = await verify_certificate(request, certificate_id, identity=identity)
     
     # Generate PDF
     pdf_bytes = generate_certificate_pdf(certificate, valid=verification_report.get("valid", False))
@@ -702,28 +698,33 @@ async def get_evidence_bundle(
 
 
 @router.post("/certificates/query")
+@limiter.limit("100/minute")  # Rate limit: 100 queries per minute
 async def query_certificates(
-    tenant_id: str,
-    date_from: str = None,
-    date_to: str = None,
-    model_version: str = None,
-    governance_policy_version: str = None,
-    human_reviewed: bool = None,
+    request: Request,  # Required for rate limiting
+    identity: Identity = Depends(require_role("auditor")),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    model_version: Optional[str] = None,
+    governance_policy_version: Optional[str] = None,
+    human_reviewed: Optional[bool] = None,
     limit: int = 100,
     offset: int = 0
 ) -> Dict[str, Any]:
     """
     Query certificates for audit and reporting purposes.
     
+    SECURITY: Requires JWT authentication with 'auditor' role.
+    Tenant ID is derived from authenticated identity (enforces isolation).
+    
     Supports filtering by:
-    - tenant_id (required) - ensures tenant isolation
     - date_from, date_to - filter by finalized_at timestamp
     - model_version - filter by AI model version
     - governance_policy_version - filter by policy version
     - human_reviewed - filter by review status
     
     Args:
-        tenant_id: Required tenant identifier (enforces isolation)
+        request: FastAPI request (for rate limiting)
+        identity: Authenticated identity (injected by JWT dependency)
         date_from: Optional start date (ISO 8601 UTC)
         date_to: Optional end date (ISO 8601 UTC)
         model_version: Optional AI model version
@@ -741,6 +742,9 @@ async def query_certificates(
     """
     import json
     from gateway.app.db.migrate import get_connection
+    
+    # Use tenant_id from authenticated identity
+    tenant_id = identity.tenant_id
     
     # Validate limit
     if limit > 1000:
