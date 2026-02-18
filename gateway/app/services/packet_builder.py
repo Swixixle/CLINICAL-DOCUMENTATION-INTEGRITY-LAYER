@@ -2,7 +2,7 @@
 Accountability Packet Builder.
 
 This module constructs the final Accountability Packet using explicit
-structured inputs and integrates HALO chain building and cryptographic signing.
+structured inputs and integrates Integrity Chain building and cryptographic signing.
 
 The packet format is protocol-locked and must not drift from the canonical
 specification.

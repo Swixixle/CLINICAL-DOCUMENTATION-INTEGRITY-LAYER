@@ -17,10 +17,9 @@ class ClinicalDocumentationRequest(BaseModel):
     - note_text: hashed before storage, never persisted in plaintext
     - patient_reference: hashed if provided
     - human_reviewer_id: hashed if provided
-    """
-    # Tenant identification
-    tenant_id: str = Field(..., description="Tenant/organization identifier (REQUIRED)")
     
+    Note: tenant_id comes from X-Tenant-Id header, not from request body
+    """
     # Governance metadata
     model_version: str = Field(..., description="AI model version used to generate note")
     prompt_version: str = Field(..., description="Prompt template version")

@@ -5,6 +5,7 @@ Handles certificate issuance and verification for AI-generated clinical notes.
 """
 
 from fastapi import APIRouter, HTTPException, Header
+from typing import Dict, Any
 from fastapi.responses import Response
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
@@ -133,7 +134,10 @@ def compute_chain_hash(certificate_data: Dict[str, Any], previous_hash: str | No
 
 
 @router.post("/clinical/documentation", response_model=CertificateIssuanceResponse)
-async def issue_certificate(request: ClinicalDocumentationRequest) -> CertificateIssuanceResponse:
+async def issue_certificate(
+    request: ClinicalDocumentationRequest,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
+) -> CertificateIssuanceResponse:
     """
     Issue an integrity certificate for finalized clinical documentation.
     
@@ -150,6 +154,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     
     Args:
         request: Clinical documentation details
+        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
         
     Returns:
         Certificate issuance response with certificate_id and full certificate
@@ -157,6 +162,8 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     Raises:
         HTTPException: 400 if PHI patterns detected in note_text
     """
+    # Use tenant_id from header
+    tenant_id = x_tenant_id
     import re
     
     # Step 0: PHI Detection Guardrails - reject obvious PHI patterns
@@ -207,12 +214,12 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     governance_summary = f"Governance policy {request.governance_policy_version} applied. Model: {request.model_version}. Human reviewed: {request.human_reviewed}."
     
     # Step 3: Get tenant's current chain head
-    previous_hash = get_tenant_chain_head(request.tenant_id)
+    previous_hash = get_tenant_chain_head(tenant_id)
     
     # Step 4: Build certificate data for chain hash computation
     certificate_data = {
         "certificate_id": certificate_id,
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "timestamp": timestamp,
         "note_hash": note_hash,
         "model_version": request.model_version,
@@ -225,7 +232,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     # Step 6: Build canonical message for signing
     canonical_message = {
         "certificate_id": certificate_id,
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "timestamp": timestamp,
         "chain_hash": chain_hash,
         "note_hash": note_hash,
@@ -238,7 +245,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     # Step 8: Assemble complete certificate
     certificate_dict = {
         "certificate_id": certificate_id,
-        "tenant_id": request.tenant_id,
+        "tenant_id": tenant_id,
         "timestamp": timestamp,
         "finalized_at": finalized_at,
         "ehr_referenced_at": None,  # Can be set later
@@ -280,6 +287,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
 @router.get("/certificates/{certificate_id}")
 async def get_certificate(
     certificate_id: str,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
 ) -> DocumentationIntegrityCertificate:
     """
@@ -287,15 +295,18 @@ async def get_certificate(
     
     Requires X-Tenant-Id header for tenant isolation.
     Returns the stored certificate with no plaintext PHI.
+    Enforces tenant isolation - returns 404 if certificate belongs to different tenant.
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
         x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
         Complete certificate
         
     Raises:
+        HTTPException: 404 if certificate not found or belongs to different tenant
         HTTPException: 400 if X-Tenant-Id header missing
         HTTPException: 404 if certificate not found or tenant mismatch
     """
@@ -313,13 +324,18 @@ async def get_certificate(
     conn = get_connection()
     try:
         cursor = conn.execute("""
-            SELECT certificate_json
+            SELECT certificate_json, tenant_id
             FROM certificates
             WHERE certificate_id = ?
         """, (certificate_id,))
         row = cursor.fetchone()
         
+        # Return 404 if not found (don't reveal existence)
         if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        # Return 404 for cross-tenant access (don't reveal existence to other tenants)
+        if row['tenant_id'] != x_tenant_id:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate_dict = json.loads(row['certificate_json'])
@@ -342,11 +358,17 @@ async def get_certificate(
 @router.post("/certificates/{certificate_id}/verify")
 async def verify_certificate(
     certificate_id: str,
+    x_tenant_id: str = Header(..., alias="X-Tenant-Id")
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-Id")
 ) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a certificate.
     
+    Enforces tenant isolation - returns 404 if certificate belongs to different tenant.
+    
+    Verifies:
+    1. Certificate exists
+    2. Certificate belongs to requesting tenant
     Requires X-Tenant-Id header for tenant isolation.
     
     Verifies:
@@ -357,6 +379,7 @@ async def verify_certificate(
     
     Args:
         certificate_id: Certificate identifier
+        x_tenant_id: Tenant ID from X-Tenant-Id header (required)
         x_tenant_id: Tenant ID from X-Tenant-Id header
         
     Returns:
@@ -388,13 +411,18 @@ async def verify_certificate(
     conn = get_connection()
     try:
         cursor = conn.execute("""
-            SELECT certificate_json
+            SELECT certificate_json, tenant_id
             FROM certificates
             WHERE certificate_id = ?
         """, (certificate_id,))
         row = cursor.fetchone()
         
+        # Return 404 if not found (don't reveal existence)
         if not row:
+            raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
+        
+        # Return 404 for cross-tenant access (don't reveal existence to other tenants)
+        if row['tenant_id'] != x_tenant_id:
             raise HTTPException(status_code=404, detail=f"Certificate not found: {certificate_id}")
         
         certificate = json.loads(row['certificate_json'])

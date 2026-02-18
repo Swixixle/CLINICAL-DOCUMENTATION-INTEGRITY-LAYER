@@ -1,6 +1,7 @@
 """
 Clinical Documentation Integrity Layer (CDIL) - FastAPI Application
 
+This is the main entry point for the CDIL Gateway API.
 This is the main entry point for the CDIL API.
 """
 
@@ -34,6 +35,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
+    title="Clinical Documentation Integrity Layer (CDIL)",
+    description="ELI - Cryptographically signed integrity certificates for AI-generated clinical documentation",
     title="Clinical Documentation Integrity Layer",
     description="Cryptographically signed integrity certificates for AI-generated clinical documentation",
     version="0.1.0",
@@ -53,6 +56,8 @@ app.include_router(mock.router)
 async def root():
     """Root endpoint."""
     return {
+        "service": "Clinical Documentation Integrity Layer (CDIL)",
+        "company": "ELI",
         "service": "Clinical Documentation Integrity Layer",
         "version": "0.1.0",
         "status": "operational"
