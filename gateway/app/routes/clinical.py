@@ -153,6 +153,7 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     # Step 1: Generate certificate ID and timestamp
     certificate_id = generate_uuid7()
     timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    finalized_at = timestamp  # Server sets finalization time, never client
     
     # Step 2: Hash PHI fields (note_text, patient_reference, reviewer_id)
     note_hash = sha256_hex(request.note_text.encode('utf-8'))
@@ -164,6 +165,10 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
     reviewer_hash = None
     if request.human_reviewer_id:
         reviewer_hash = sha256_hex(request.human_reviewer_id.encode('utf-8'))
+    
+    # Step 3: Compute policy hash and generate governance summary
+    policy_hash = sha256_hex(request.governance_policy_version.encode('utf-8'))
+    governance_summary = f"Governance policy {request.governance_policy_version} applied. Model: {request.model_version}. Human reviewed: {request.human_reviewed}."
     
     # Step 3: Get tenant's current chain head
     previous_hash = get_tenant_chain_head(request.tenant_id)
@@ -199,9 +204,14 @@ async def issue_certificate(request: ClinicalDocumentationRequest) -> Certificat
         "certificate_id": certificate_id,
         "tenant_id": request.tenant_id,
         "timestamp": timestamp,
+        "finalized_at": finalized_at,
+        "ehr_referenced_at": None,  # Can be set later
+        "ehr_commit_id": None,  # Can be set later
         "model_version": request.model_version,
         "prompt_version": request.prompt_version,
         "governance_policy_version": request.governance_policy_version,
+        "policy_hash": policy_hash,
+        "governance_summary": governance_summary,
         "note_hash": note_hash,
         "patient_hash": patient_hash,
         "reviewer_hash": reviewer_hash,
@@ -315,6 +325,25 @@ async def verify_certificate(certificate_id: str) -> Dict[str, Any]:
         conn.close()
     
     failures = []
+    
+    # Verify timing integrity
+    finalized_at_str = certificate.get("finalized_at")
+    ehr_referenced_at_str = certificate.get("ehr_referenced_at")
+    
+    if finalized_at_str and ehr_referenced_at_str:
+        try:
+            from datetime import datetime
+            finalized_at = datetime.fromisoformat(finalized_at_str.replace('Z', '+00:00'))
+            ehr_referenced_at = datetime.fromisoformat(ehr_referenced_at_str.replace('Z', '+00:00'))
+            
+            if finalized_at > ehr_referenced_at:
+                debug_info = {
+                    "finalized_at": finalized_at_str,
+                    "ehr_referenced_at": ehr_referenced_at_str
+                }
+                failures.append(fail("timing", "finalized_after_ehr_reference", debug_info))
+        except Exception as e:
+            failures.append(fail("timing", "timestamp_parse_error", {"exception": type(e).__name__}))
     
     # Verify chain hash
     try:

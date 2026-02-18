@@ -61,6 +61,7 @@ class DocumentationIntegrityCertificate(BaseModel):
     - Human review status
     - Chain linkage (prevents tampering/insertion)
     - Signature (proves origin, prevents forgery)
+    - Timing integrity (finalization vs EHR reference)
     
     No plaintext PHI is included.
     """
@@ -69,10 +70,19 @@ class DocumentationIntegrityCertificate(BaseModel):
     tenant_id: str = Field(..., description="Tenant/organization identifier")
     timestamp: str = Field(..., description="Certificate issuance timestamp (ISO 8601 UTC)")
     
+    # Timing integrity
+    finalized_at: str = Field(..., description="When note was finalized and certificate issued (ISO 8601 UTC)")
+    ehr_referenced_at: Optional[str] = Field(default=None, description="When EHR/record references the note/cert (ISO 8601 UTC)")
+    ehr_commit_id: Optional[str] = Field(default=None, description="Opaque EHR reference string (no PHI)")
+    
     # Governance metadata
     model_version: str = Field(..., description="AI model version")
     prompt_version: str = Field(..., description="Prompt template version")
     governance_policy_version: str = Field(..., description="Governance policy version")
+    
+    # Governance provenance
+    policy_hash: str = Field(..., description="Hash of governance policy document")
+    governance_summary: str = Field(..., description="Plain English policy summary")
     
     # Content hashes (no plaintext PHI)
     note_hash: str = Field(..., description="SHA-256 hash of note content")
