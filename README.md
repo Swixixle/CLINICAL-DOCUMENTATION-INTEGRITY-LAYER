@@ -456,13 +456,22 @@ ENV=TEST pytest gateway/tests/test_evidence_bundle.py -v
 ### Testing
 
 ```bash
-# Run Phase 1 tests
-pytest gateway/tests/test_evidence_bundle.py -v
+# Run smoke tests (verifies basic functionality)
+./tools/smoke-test-local.sh   # Test local deployment
+./tools/smoke-test-docker.sh  # Test Docker deployment
 
-# Run all Phase 1 tests
+# Run unit tests
+PYTHONPATH=$PWD ENV=TEST DISABLE_RATE_LIMITS=1 pytest
+
+# Run specific test files
+pytest gateway/tests/test_evidence_bundle.py -v
 pytest gateway/tests/test_clinical_endpoints.py -v
-pytest gateway/tests/test_phase1_security.py -v
+pytest gateway/tests/test_part11_compliance.py -v
 ```
+
+**Smoke Tests**: Always run smoke tests before submitting a PR to ensure the gateway can start and respond to health checks. See [tools/README.md](tools/README.md) for details.
+
+**Copilot Guidelines**: See [.github/copilot-instructions.md](.github/copilot-instructions.md) for important rules when working with Copilot on this repository.
 
 ---
 
