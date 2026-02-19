@@ -1,0 +1,35 @@
+{
+  "defaults": {
+    "outpatient_em_delta_usd": 142.00
+  },
+  "rules": [
+    {
+      "encounter_type": "outpatient",
+      "risk_threshold": 60,
+      "delta_usd": 142.00,
+      "assumption_id": "DEFAULT_OUTPATIENT_EM_DELTA_V1",
+      "rationale": "Estimated delta between Level 5 denial/downcode to Level 3 for outpatient E/M."
+    },
+    {
+      "encounter_type": "inpatient",
+      "risk_threshold": 70,
+      "delta_usd": 500.00,
+      "assumption_id": "INPATIENT_DRG_DOWNGRADE_V1",
+      "rationale": "Estimated impact of missing MEAT documentation on DRG reimbursement."
+    },
+    {
+      "encounter_type": "ed",
+      "risk_threshold": 60,
+      "delta_usd": 250.00,
+      "assumption_id": "ED_LEVEL_DOWNGRADE_V1",
+      "rationale": "Estimated delta between high-acuity ED visit downgrade."
+    },
+    {
+      "encounter_type": "observation",
+      "risk_threshold": 65,
+      "delta_usd": 300.00,
+      "assumption_id": "OBSERVATION_DOWNGRADE_V1",
+      "rationale": "Estimated impact of observation status documentation deficiency."
+    }
+  ]
+}

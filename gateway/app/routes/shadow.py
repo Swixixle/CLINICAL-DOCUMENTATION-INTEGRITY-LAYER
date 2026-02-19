@@ -411,10 +411,10 @@ async def analyze_evidence_deficit(
     # Generate timestamp
     generated_at = datetime.now(timezone.utc).isoformat()
 
-    # Calculate revenue estimate
-    revenue_estimate = 0.0
-    if denial_risk.score > 60 and request.encounter_type == "outpatient":
-        revenue_estimate = 142.00
+    # Calculate revenue estimate using deterministic model
+    from gateway.app.services.revenue_model import revenue_estimate as calc_revenue
+
+    rev_estimate = calc_revenue(request.encounter_type, denial_risk.score)
 
     # Generate exec headline based on risk score
     if risk_score >= 81:
@@ -439,15 +439,9 @@ async def analyze_evidence_deficit(
 
     # Update denial_risk with revenue estimate
     denial_risk.estimated_preventable_revenue_loss = RevenueEstimate(
-        low=revenue_estimate,
-        high=revenue_estimate,
-        assumptions=[
-            (
-                "Estimated delta between Level 5 denial/downcode to Level 3 for outpatient E/M."
-                if revenue_estimate > 0
-                else "No significant revenue risk identified"
-            )
-        ],
+        low=rev_estimate.amount,
+        high=rev_estimate.amount,
+        assumptions=[rev_estimate.rationale],
     )
 
     # Build result
@@ -462,7 +456,161 @@ async def analyze_evidence_deficit(
         dashboard_title="Evidence Deficit Intelligence",
         headline=exec_headline,
         next_best_actions=next_actions,
-        revenue_estimate=revenue_estimate,
+        revenue_estimate=rev_estimate.amount,
     )
 
     return result
+
+
+# ============================================================================
+# Leakage Report Endpoint (Phase 4 - CFO Reporting)
+# ============================================================================
+
+
+class LeakageReportRequest(BaseModel):
+    """Request for batch leakage report."""
+
+    notes: List[ShadowRequest] = Field(
+        ..., description="List of shadow requests to analyze"
+    )
+
+
+class LeakageReportResponse(BaseModel):
+    """CFO-friendly leakage report response."""
+
+    total_notes: int = Field(..., description="Total number of notes analyzed")
+    total_revenue_at_risk: float = Field(
+        ..., description="Total estimated revenue at risk (USD)"
+    )
+    risk_distribution: Dict[str, int] = Field(
+        ...,
+        description="Count of notes in each risk band (low, moderate, high, critical)",
+    )
+    top_rules_by_impact: List[Dict[str, Any]] = Field(
+        ..., description="Top 10 rule IDs by aggregate revenue impact"
+    )
+    top_conditions: List[Dict[str, Any]] = Field(
+        ..., description="Top conditions by revenue at risk"
+    )
+    sample_high_risk_notes: List[str] = Field(
+        ..., description="Hashes of high-risk notes (no PHI)"
+    )
+    generated_at: str = Field(..., description="Report generation timestamp")
+    tenant_id: str = Field(..., description="Tenant ID from JWT")
+
+
+@router.post("/leakage-report", response_model=LeakageReportResponse)
+async def generate_leakage_report(
+    request: LeakageReportRequest, identity: Identity = Depends(get_current_identity)
+) -> LeakageReportResponse:
+    """
+    Generate CFO-level leakage report for batch of notes.
+
+    This endpoint analyzes a batch of clinical notes and produces an
+    executive summary showing total revenue at risk, risk distribution,
+    and top contributing factors. Designed for board/CFO presentation.
+
+    **Privacy**: No note_text is stored, only hashes for identification.
+
+    Args:
+        request: Batch of shadow requests to analyze
+        identity: Authenticated identity (from JWT)
+
+    Returns:
+        CFO-friendly leakage report with revenue rollup
+    """
+    if not request.notes:
+        raise HTTPException(status_code=400, detail="No notes provided for analysis")
+
+    tenant_id = identity.tenant_id
+
+    # Initialize aggregation structures
+    total_revenue_at_risk = 0.0
+    risk_distribution = {"low": 0, "moderate": 0, "high": 0, "critical": 0}
+    rule_impact_map = {}  # rule_id -> total revenue impact
+    condition_impact_map = {}  # condition -> total revenue impact
+    high_risk_hashes = []
+
+    # Process each note
+    for shadow_req in request.notes:
+        # Score the note
+        risk_score, sufficiency, deficits, denial_risk = _SCORER.score(shadow_req)
+
+        # Calculate revenue estimate
+        from gateway.app.services.revenue_model import revenue_estimate as calc_revenue
+
+        rev_estimate = calc_revenue(shadow_req.encounter_type, denial_risk.score)
+
+        # Aggregate revenue
+        total_revenue_at_risk += rev_estimate.amount
+
+        # Track risk distribution
+        if risk_score <= 30:
+            risk_distribution["low"] += 1
+        elif risk_score <= 60:
+            risk_distribution["moderate"] += 1
+        elif risk_score <= 80:
+            risk_distribution["high"] += 1
+        else:
+            risk_distribution["critical"] += 1
+
+        # Track rule impacts
+        for explanation in sufficiency.explain:
+            rule_id = explanation.rule_id
+            if rule_id not in rule_impact_map:
+                rule_impact_map[rule_id] = {
+                    "rule_id": rule_id,
+                    "count": 0,
+                    "total_revenue_impact": 0.0,
+                }
+            rule_impact_map[rule_id]["count"] += 1
+            rule_impact_map[rule_id]["total_revenue_impact"] += rev_estimate.amount
+
+        # Track condition impacts
+        for deficit in deficits:
+            if deficit.condition:
+                cond = deficit.condition
+                if cond not in condition_impact_map:
+                    condition_impact_map[cond] = {
+                        "condition": cond,
+                        "count": 0,
+                        "total_revenue_impact": 0.0,
+                    }
+                condition_impact_map[cond]["count"] += 1
+                condition_impact_map[cond][
+                    "total_revenue_impact"
+                ] += rev_estimate.amount
+
+        # Track high-risk note hashes
+        if risk_score >= 61:
+            canonical_req = canonicalize_request(shadow_req)
+            note_hash = sha256_hex(canonical_req.encode("utf-8"))
+            high_risk_hashes.append(note_hash)
+
+    # Generate top rules by impact (top 10)
+    top_rules = sorted(
+        rule_impact_map.values(),
+        key=lambda x: x["total_revenue_impact"],
+        reverse=True,
+    )[:10]
+
+    # Generate top conditions by impact
+    top_conditions = sorted(
+        condition_impact_map.values(),
+        key=lambda x: x["total_revenue_impact"],
+        reverse=True,
+    )
+
+    # Limit high-risk sample to 20 hashes
+    sample_high_risk = high_risk_hashes[:20]
+
+    return LeakageReportResponse(
+        total_notes=len(request.notes),
+        total_revenue_at_risk=round(total_revenue_at_risk, 2),
+        risk_distribution=risk_distribution,
+        top_rules_by_impact=top_rules,
+        top_conditions=top_conditions,
+        sample_high_risk_notes=sample_high_risk,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        tenant_id=tenant_id,
+    )
