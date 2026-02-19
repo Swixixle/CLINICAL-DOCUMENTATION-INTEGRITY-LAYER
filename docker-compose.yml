@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  cdil-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cdil-gateway:latest
+    container_name: cdil-gateway
+    
+    ports:
+      - "8000:8000"
+    
+    environment:
+      # Database
+      - CDIL_DB_PATH=/data/eli_sentinel.db
+      
+      # JWT Configuration (DO NOT USE THESE IN PRODUCTION)
+      # In production, use secrets management (AWS Secrets Manager, etc.)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+      - JWT_ALGORITHM=HS256
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=json
+      
+      # Rate Limiting
+      - RATE_LIMIT_ENABLED=true
+      
+    volumes:
+      # Persistent database storage
+      - cdil-data:/data
+      
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    networks:
+      - cdil-network
+    
+    # Security: Run as non-root user
+    user: "1000:1000"
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+volumes:
+  cdil-data:
+    driver: local
+
+networks:
+  cdil-network:
+    driver: bridge
