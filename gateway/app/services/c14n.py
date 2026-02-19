@@ -20,6 +20,37 @@ Canonicalization Rules (v1):
 
 Supported types: dict, list, str, int, float, bool, None
 Unsupported types raise ValueError
+
+Canonical Message Ordering for Certificates (Courtroom Defense Mode):
+==================================================================
+The canonical message for certificate signing MUST include ALL provenance fields
+in alphabetical order (enforced by sort_keys=True):
+
+Required Fields (ALL must be signed):
+- certificate_id: UUID7 certificate identifier
+- chain_hash: Integrity chain hash linking to previous certificate
+- governance_policy_hash: Hash of the governance policy document  
+- governance_policy_version: Version identifier of governance policy
+- human_attested_at_utc: ISO 8601 timestamp when human attestation occurred (or null)
+- human_reviewed: Boolean flag indicating human review status
+- human_reviewer_id_hash: SHA-256 hash of reviewer ID (or null if not reviewed)
+- issued_at_utc: ISO 8601 timestamp when certificate was issued
+- key_id: Signing key identifier for key rotation support
+- model_name: Name/identifier of AI model (e.g., "gpt-4", "claude-3")
+- model_version: Version of AI model used
+- note_hash: SHA-256 hash of clinical note content
+- nonce: UUID7 nonce for replay protection (added by signer)
+- prompt_version: Version identifier of prompt template
+- server_timestamp: ISO 8601 server timestamp (added by signer for replay protection)
+- tenant_id: Tenant/organization identifier
+
+Non-Deterministic Fields (MUST be server-controlled):
+- nonce: Generated server-side using UUID7
+- server_timestamp: Generated server-side
+- issued_at_utc: Server clock time (client cannot forge)
+
+CRITICAL: Any change to this field list or ordering will break all existing signatures.
+This is a cryptographic contract. Changes require a new canonicalization version.
 """
 
 import json

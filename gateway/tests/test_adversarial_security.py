@@ -33,7 +33,8 @@ class TestTenantIsolation:
         # Tenant A issues a certificate
         headers_a = create_auth_headers(**TEST_CLINICIAN)
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
@@ -93,7 +94,8 @@ class TestAuthenticationEnforcement:
     def test_certificate_issuance_requires_auth(self):
         """Test that certificate issuance requires authentication."""
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
@@ -135,7 +137,8 @@ class TestRoleBasedAccessControl:
         """Test that auditor role cannot issue certificates."""
         headers = create_auth_headers(**TEST_AUDITOR)
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
@@ -156,7 +159,8 @@ class TestRoleBasedAccessControl:
         """Test that clinician role can issue certificates."""
         headers = create_auth_headers(**TEST_CLINICIAN)
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
@@ -191,7 +195,8 @@ class TestReplayProtection:
         tenant_id = "hospital-replay-test"
         test_message = {
             "certificate_id": "test-cert-001",
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "note_hash": "abc123"
         }
         
@@ -246,7 +251,8 @@ class TestSignatureIntegrity:
         # Issue a certificate
         headers = create_auth_headers(**TEST_CLINICIAN)
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
@@ -304,7 +310,8 @@ class TestPHIProtection:
         """Test that obvious PHI patterns are rejected."""
         headers = create_auth_headers(**TEST_CLINICIAN)
         request_with_phi = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient SSN is 123-45-6789",
@@ -335,7 +342,8 @@ class TestRateLimiting:
         """
         headers = create_auth_headers(**TEST_CLINICIAN)
         cert_request = {
-            "model_version": "gpt-4-turbo",
+            "model_name": "gpt-4",
+        "model_version": "gpt-4-turbo",
             "prompt_version": "v1.0",
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",

@@ -20,15 +20,18 @@ class ClinicalDocumentationRequest(BaseModel):
     
     Note: tenant_id is derived from JWT authentication, not from request body or headers
     """
-    # Governance metadata
+    # AI Model metadata (Courtroom Defense Mode - required for provenance)
+    model_name: str = Field(..., description="AI model name/identifier (e.g., 'gpt-4', 'claude-3')")
     model_version: str = Field(..., description="AI model version used to generate note")
     prompt_version: str = Field(..., description="Prompt template version")
+    
+    # Governance metadata
     governance_policy_version: str = Field(..., description="Governance policy version")
     
     # Clinical note content (will be hashed, not stored in plaintext)
     note_text: str = Field(..., description="Clinical note content (will be hashed)")
     
-    # Review status
+    # Review status (Courtroom Defense Mode - human attestation)
     human_reviewed: bool = Field(..., description="Whether note was reviewed by clinician")
     
     # Optional fields
@@ -57,30 +60,38 @@ class DocumentationIntegrityCertificate(BaseModel):
     This certificate provides cryptographic proof of:
     - Note content integrity (via note_hash)
     - Governance compliance (model_version, policy_version)
-    - Human review status
+    - Human review status and attestation
     - Chain linkage (prevents tampering/insertion)
     - Signature (proves origin, prevents forgery)
     - Timing integrity (finalization vs EHR reference)
     
     No plaintext PHI is included.
+    
+    Courtroom Defense Mode: ALL provenance fields are included in the signed
+    canonical message to provide complete chain of custody.
     """
     # Certificate identification
     certificate_id: str = Field(..., description="Unique certificate identifier")
     tenant_id: str = Field(..., description="Tenant/organization identifier")
     timestamp: str = Field(..., description="Certificate issuance timestamp (ISO 8601 UTC)")
+    issued_at_utc: str = Field(..., description="When certificate was issued (ISO 8601 UTC) - signed field")
     
     # Timing integrity
     finalized_at: str = Field(..., description="When note was finalized and certificate issued (ISO 8601 UTC)")
     ehr_referenced_at: Optional[str] = Field(default=None, description="When EHR/record references the note/cert (ISO 8601 UTC)")
     ehr_commit_id: Optional[str] = Field(default=None, description="Opaque EHR reference string (no PHI)")
     
-    # Governance metadata
+    # AI Model metadata (Courtroom Defense Mode)
+    model_name: str = Field(..., description="AI model name/identifier (e.g., 'gpt-4', 'claude-3')")
     model_version: str = Field(..., description="AI model version")
     prompt_version: str = Field(..., description="Prompt template version")
-    governance_policy_version: str = Field(..., description="Governance policy version")
     
-    # Governance provenance
-    policy_hash: str = Field(..., description="Hash of governance policy document")
+    # Governance metadata
+    governance_policy_version: str = Field(..., description="Governance policy version")
+    governance_policy_hash: str = Field(..., description="Hash of governance policy document (signed)")
+    
+    # Governance provenance (legacy field)
+    policy_hash: str = Field(..., description="Hash of governance policy document (legacy)")
     governance_summary: str = Field(..., description="Plain English policy summary")
     
     # Content hashes (no plaintext PHI)
@@ -88,9 +99,13 @@ class DocumentationIntegrityCertificate(BaseModel):
     patient_hash: Optional[str] = Field(default=None, description="SHA-256 hash of patient reference")
     reviewer_hash: Optional[str] = Field(default=None, description="SHA-256 hash of reviewer ID")
     
+    # Human attestation (Courtroom Defense Mode)
+    human_reviewed: bool = Field(..., description="Whether note was reviewed by clinician")
+    human_reviewer_id_hash: Optional[str] = Field(default=None, description="SHA-256 hash of reviewer ID (signed field)")
+    human_attested_at_utc: Optional[str] = Field(default=None, description="When human attestation occurred (ISO 8601 UTC) - signed field")
+    
     # Clinical context
     encounter_id: Optional[str] = Field(default=None, description="Encounter/visit identifier")
-    human_reviewed: bool = Field(..., description="Whether note was reviewed by clinician")
     
     # Integrity chain
     integrity_chain: IntegrityChain = Field(..., description="Chain linkage for tamper detection")

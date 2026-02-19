@@ -60,6 +60,7 @@ def client(test_db):
 def issue_test_certificate(client, tenant_id="test-tenant-001"):
     """Helper to issue a test certificate."""
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-turbo",
         "prompt_version": "clinical-v1.2",
         "governance_policy_version": "CDOC-Policy-v1",
@@ -197,6 +198,7 @@ def test_evidence_bundle_no_phi_in_response(client):
     """Test that evidence bundle contains no plaintext PHI."""
     # Issue certificate with safe PHI fields (PHI detection only catches certain patterns)
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-turbo",
         "prompt_version": "clinical-v1.2",
         "governance_policy_version": "CDOC-Policy-v1",

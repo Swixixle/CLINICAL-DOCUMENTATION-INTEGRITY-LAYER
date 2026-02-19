@@ -193,6 +193,7 @@ def sign_generic_message(
     - Nonce for replay protection
     - Server timestamp
     - Key rotation support
+    - Key ID inclusion in signed message (Courtroom Defense Mode)
     
     Args:
         message_obj: Dictionary to sign (will be canonicalized)
@@ -202,7 +203,7 @@ def sign_generic_message(
         Dictionary containing:
             - algorithm: Algorithm identifier
             - key_id: Key identifier
-            - canonical_message: Original message object (with nonce/timestamp)
+            - canonical_message: Original message object (with nonce/timestamp/key_id)
             - signature: Base64-encoded signature
             
     Raises:
@@ -226,10 +227,11 @@ def sign_generic_message(
         key_id = registry.ensure_tenant_has_key(tenant_id)
         key_data = registry.get_active_key(tenant_id)
     
-    # Add nonce and timestamp for replay protection
+    # Add nonce, timestamp, and key_id for replay protection and provenance
     from gateway.app.services.uuid7 import generate_uuid7
     enhanced_message = {
         **message_obj,
+        "key_id": key_data['key_id'],  # Add key_id to signed message (Courtroom Defense Mode)
         "nonce": generate_uuid7(),
         "server_timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     }

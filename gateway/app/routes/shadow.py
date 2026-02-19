@@ -25,6 +25,19 @@ from gateway.app.services.revenue_model import estimate_revenue_risk, calculate_
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+# Shadow Mode routes for Evidence Deficit Intelligence.
+#
+# Shadow Mode is a read-only analysis feature that:
+# - Analyzes clinical notes + structured context
+# - Identifies documentation deficits and denial risks
+# - Provides actionable recommendations
+# - Does NOT write back to EHR or store PHI
+#
+# Security:
+# - JWT authentication required (tenant_id from JWT, never from request)
+# - Rate limiting to prevent abuse
+# - No PHI storage (only hashes and aggregates)
+
 import os
 import json
 from datetime import datetime, timezone
