@@ -20,30 +20,40 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, shadow
-from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, shadow, shadow_intake, dashboard
+from gateway.app.routes import (
+    health,
+    keys,
+    transactions,
+    ai,
+    clinical,
+    mock,
+    analytics,
+    shadow,
+    shadow_intake,
+    dashboard,
+)
 from gateway.app.db.migrate import ensure_schema, check_db_security
-
 
 # Initialize rate limiter with test mode bypass
 import uuid
+
 
 def get_test_mode_key_func():
     """Return a unique key for each request in test mode to bypass rate limiting."""
     return lambda: str(uuid.uuid4())
 
+
 def get_limiter():
     """
     Create rate limiter that can be disabled in test mode.
-    
+
     Set ENV=TEST or DISABLE_RATE_LIMITS=1 to disable rate limiting.
     This allows tests to run cleanly in CI without rate limit failures.
     """
     disable_limits = (
-        os.environ.get("ENV") == "TEST" or
-        os.environ.get("DISABLE_RATE_LIMITS") == "1"
+        os.environ.get("ENV") == "TEST" or os.environ.get("DISABLE_RATE_LIMITS") == "1"
     )
-    
+
     if disable_limits:
         # In test mode, use a key function that returns a unique key per request
         # This ensures each request gets its own rate limit bucket, effectively disabling limits
@@ -51,29 +61,30 @@ def get_limiter():
     else:
         return Limiter(key_func=get_remote_address)
 
+
 limiter = get_limiter()
 
 
 def sanitize_error_detail(detail: any) -> dict:
     """
     Sanitize error details to prevent PHI leakage.
-    
+
     Removes any potential PHI from error messages before returning to client.
-    
+
     Args:
         detail: Error detail from exception
-        
+
     Returns:
         Sanitized error detail safe for client consumption
     """
     # If detail is a dict, return as-is (assumed pre-sanitized by our code)
     if isinstance(detail, dict):
         return detail
-    
+
     # Otherwise, return generic message
     return {
         "error": "internal_error",
-        "message": "An error occurred processing your request"
+        "message": "An error occurred processing your request",
     }
 
 
@@ -81,7 +92,7 @@ def sanitize_error_detail(detail: any) -> dict:
 async def lifespan(app: FastAPI):
     """
     Lifecycle management for the FastAPI app.
-    
+
     On startup:
     - Ensure database schema exists
     - Enable database security hardening (WAL mode, permissions)
@@ -90,23 +101,24 @@ async def lifespan(app: FastAPI):
     """
     # Initialize database
     ensure_schema()
-    
+
     # Check database security
     security_status = check_db_security()
-    
+
     # Warn if security is not optimal (but don't fail startup)
     if not security_status.get("wal_enabled"):
         print("WARNING: Database WAL mode not enabled")
-    
+
     if not security_status.get("permissions_secure"):
         print("WARNING: Database file permissions may not be secure")
-    
+
     # Bootstrap dev keys (for development/testing only)
     from gateway.app.services.storage import bootstrap_dev_keys
+
     bootstrap_dev_keys()
-    
+
     yield
-    
+
     # Cleanup (if needed)
 
 
@@ -117,7 +129,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
     # Disable debug mode in production
-    debug=False
+    debug=False,
 )
 
 # Register rate limiter
@@ -130,8 +142,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions without leaking PHI."""
     return JSONResponse(
-        status_code=exc.status_code,
-        content=sanitize_error_detail(exc.detail)
+        status_code=exc.status_code, content=sanitize_error_detail(exc.detail)
     )
 
 
@@ -139,7 +150,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
     Handle validation errors without leaking request body.
-    
+
     Pydantic validation errors can include parts of the request body,
     which might contain PHI. We sanitize this to only show field names.
     """
@@ -147,19 +158,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     errors = []
     for error in exc.errors():
         field_path = " -> ".join(str(loc) for loc in error["loc"])
-        errors.append({
-            "field": field_path,
-            "type": error["type"],
-            "message": error["msg"]
-        })
-    
+        errors.append(
+            {"field": field_path, "type": error["type"], "message": error["msg"]}
+        )
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": "validation_error",
             "message": "Request validation failed",
-            "details": errors
-        }
+            "details": errors,
+        },
     )
 
 
@@ -167,20 +176,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def general_exception_handler(request: Request, exc: Exception):
     """
     Catch-all exception handler to prevent stack traces with PHI.
-    
+
     In production, this prevents any unhandled exceptions from leaking
     request data or internal state that might contain PHI.
     """
     # Log the full exception server-side (with appropriate PHI controls)
     # In production, use structured logging with PHI redaction
     print(f"Unhandled exception: {type(exc).__name__}")
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": "internal_error",
-            "message": "An unexpected error occurred"
-        }
+        content={"error": "internal_error", "message": "An unexpected error occurred"},
     )
 
 
@@ -206,5 +212,5 @@ async def root():
     return {
         "service": "Clinical Documentation Integrity Layer (CDIL)",
         "version": "0.1.0",
-        "status": "operational"
+        "status": "operational",
     }
