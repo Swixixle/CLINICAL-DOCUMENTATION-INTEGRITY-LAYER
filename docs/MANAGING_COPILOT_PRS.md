@@ -92,9 +92,9 @@ jobs:
           stale-pr-label: 'stale'
 ```
 
-## Current Stale PRs (as of Feb 2026)
+## Example: Stale PRs Cleanup (Feb 2026)
 
-The following PRs are identified as stale:
+The following PRs were identified as stale at the time this guide was created:
 
 | PR # | Title | Status | Action |
 |------|-------|--------|--------|
@@ -103,11 +103,10 @@ The following PRs are identified as stale:
 | #44 | [WIP] Fix issues with instruction compliance | Stale | Close |
 | #45 | [WIP] Update CI workflow to fix multiple Copilot issues | Stale | Close |
 | #46 | [WIP] Add run outside Docker command to documentation | Stale | Close |
-| #48 | [WIP] Address issues with failed PR requests | Active | Keep (current PR) |
 
-### Recommended Actions
+### Recommended Cleanup Actions
 
-**Immediate cleanup (PRs #42-46):**
+**Close multiple stale PRs at once:**
 ```bash
 python tools/manage_stale_prs.py --pr-numbers 42,43,44,45,46 --close
 ```
