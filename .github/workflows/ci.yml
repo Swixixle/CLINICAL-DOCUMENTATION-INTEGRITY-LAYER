@@ -36,5 +36,6 @@ jobs:
       run: |
         pytest -q
       env:
+        PYTHONPATH: ${{ github.workspace }}
         ENV: TEST
         DISABLE_RATE_LIMITS: "1"
