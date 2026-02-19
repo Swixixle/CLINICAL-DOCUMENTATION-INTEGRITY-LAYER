@@ -11,7 +11,89 @@ Design Principles:
 - Conservative estimates
 """
 
-from typing import Dict, List, Any
+import json
+import os
+from typing import Dict, List, Any, Optional
+from pathlib import Path
+from pydantic import BaseModel, Field
+
+from gateway.app.models.shadow import EncounterType
+
+
+class RevenueEstimateResult(BaseModel):
+    """Result from revenue estimation."""
+
+    amount: float = Field(..., description="Estimated revenue at risk (USD)")
+    assumption_id: str = Field(..., description="ID of the assumption used")
+    rationale: str = Field(..., description="Explanation of the estimate")
+
+
+def load_revenue_mapping() -> Dict[str, Any]:
+    """
+    Load revenue mapping configuration from JSON file.
+
+    Returns:
+        Revenue mapping dict with defaults and rules
+    """
+    # Path to revenue mapping file
+    mapping_file = Path(__file__).parent.parent / "data" / "revenue_mapping.json"
+
+    if not mapping_file.exists():
+        # Return minimal defaults if file not found
+        return {
+            "defaults": {"outpatient_em_delta_usd": 142.00},
+            "rules": [
+                {
+                    "encounter_type": "outpatient",
+                    "risk_threshold": 60,
+                    "delta_usd": 142.00,
+                    "assumption_id": "DEFAULT_OUTPATIENT_EM_DELTA_V1",
+                    "rationale": "Estimated delta between Level 5 denial/downcode to Level 3 for outpatient E/M.",
+                }
+            ],
+        }
+
+    with open(mapping_file, "r") as f:
+        return json.load(f)
+
+
+def revenue_estimate(
+    encounter_type: EncounterType, risk_score: int
+) -> RevenueEstimateResult:
+    """
+    Calculate deterministic revenue estimate based on encounter type and risk score.
+
+    Uses configurable mapping to select appropriate revenue delta based on
+    encounter type and risk threshold. No guessing - if no rule matches, amount=0.
+
+    Args:
+        encounter_type: Type of encounter (inpatient, outpatient, etc.)
+        risk_score: Risk score (0-100, higher = higher risk)
+
+    Returns:
+        RevenueEstimateResult with amount, assumption_id, and rationale
+    """
+    mapping = load_revenue_mapping()
+
+    # Find matching rule
+    for rule in mapping.get("rules", []):
+        if rule.get(
+            "encounter_type"
+        ) == encounter_type.value and risk_score >= rule.get("risk_threshold", 0):
+            return RevenueEstimateResult(
+                amount=rule.get("delta_usd", 0.0),
+                assumption_id=rule.get("assumption_id", "UNKNOWN"),
+                rationale=rule.get(
+                    "rationale", "Estimated revenue impact based on denial risk"
+                ),
+            )
+
+    # No matching rule found
+    return RevenueEstimateResult(
+        amount=0.0,
+        assumption_id="NO_MATCH",
+        rationale="Risk score below threshold or no matching rule for encounter type",
+    )
 
 
 def estimate_revenue_risk(

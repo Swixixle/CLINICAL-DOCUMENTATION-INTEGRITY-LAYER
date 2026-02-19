@@ -411,10 +411,10 @@ async def analyze_evidence_deficit(
     # Generate timestamp
     generated_at = datetime.now(timezone.utc).isoformat()
 
-    # Calculate revenue estimate
-    revenue_estimate = 0.0
-    if denial_risk.score > 60 and request.encounter_type == "outpatient":
-        revenue_estimate = 142.00
+    # Calculate revenue estimate using deterministic model
+    from gateway.app.services.revenue_model import revenue_estimate as calc_revenue
+
+    rev_estimate = calc_revenue(request.encounter_type, denial_risk.score)
 
     # Generate exec headline based on risk score
     if risk_score >= 81:
@@ -439,15 +439,9 @@ async def analyze_evidence_deficit(
 
     # Update denial_risk with revenue estimate
     denial_risk.estimated_preventable_revenue_loss = RevenueEstimate(
-        low=revenue_estimate,
-        high=revenue_estimate,
-        assumptions=[
-            (
-                "Estimated delta between Level 5 denial/downcode to Level 3 for outpatient E/M."
-                if revenue_estimate > 0
-                else "No significant revenue risk identified"
-            )
-        ],
+        low=rev_estimate.amount,
+        high=rev_estimate.amount,
+        assumptions=[rev_estimate.rationale],
     )
 
     # Build result
@@ -462,7 +456,7 @@ async def analyze_evidence_deficit(
         dashboard_title="Evidence Deficit Intelligence",
         headline=exec_headline,
         next_best_actions=next_actions,
-        revenue_estimate=revenue_estimate,
+        revenue_estimate=rev_estimate.amount,
     )
 
     return result
