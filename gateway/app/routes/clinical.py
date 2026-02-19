@@ -944,3 +944,128 @@ async def query_certificates(
         "offset": offset,
         "certificates": certificates
     }
+
+
+@router.get("/certificates/{certificate_id}/defense-bundle")
+@limiter.limit("100/minute")  # Rate limit: 100 defense bundles per minute
+async def get_defense_bundle(
+    request: Request,  # Required for rate limiting
+    certificate_id: str,
+    identity: Identity = Depends(get_current_identity)
+) -> Response:
+    """
+    Generate and return courtroom defense bundle as ZIP archive.
+    
+    This is the LITIGATION-READY format with all artifacts needed for:
+    - Legal proceedings
+    - Expert witness testimony
+    - Offline verification
+    - Courtroom presentation
+    
+    SECURITY: Requires JWT authentication.
+    Enforces tenant isolation - returns 404 for cross-tenant access.
+    
+    Bundle contains:
+    - certificate.json: Complete certificate with all provenance fields
+    - canonical_message.json: Exact message that was signed
+    - verification_report.json: Current verification status
+    - public_key.pem: Public key for signature verification
+    - README.txt: Step-by-step offline verification instructions for legal audiences
+    
+    The README is written for:
+    - Attorneys
+    - Expert witnesses
+    - Judges
+    - Compliance officers
+    
+    Args:
+        request: FastAPI request (for rate limiting)
+        certificate_id: Certificate identifier
+        identity: Authenticated identity (injected by JWT dependency)
+        
+    Returns:
+        ZIP file as application/zip
+        
+    Raises:
+        HTTPException: 404 if certificate not found or wrong tenant
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+    from gateway.app.services.key_registry import get_key_registry
+    from gateway.app.services.evidence_bundle import generate_defense_bundle
+    from cryptography.hazmat.primitives import serialization
+    
+    tenant_id = identity.tenant_id
+    
+    # Retrieve certificate with tenant isolation
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
+            SELECT certificate_json
+            FROM certificates
+            WHERE certificate_id = ?
+        """, (certificate_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "not_found", "message": "Certificate not found"}
+            )
+        
+        certificate = json.loads(row['certificate_json'])
+        
+        # Enforce tenant isolation
+        if certificate.get("tenant_id") != tenant_id:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "not_found", "message": "Certificate not found"}
+            )
+    finally:
+        conn.close()
+    
+    # Verify certificate to get current status
+    verification_result = await verify_certificate(request, certificate_id, identity=identity)
+    
+    # Get public key for signature verification
+    key_id = certificate.get("signature", {}).get("key_id")
+    tenant_id_from_cert = certificate.get("tenant_id")
+    
+    registry = get_key_registry()
+    key_data = registry.get_key_by_id(tenant_id_from_cert, key_id)
+    
+    if not key_data:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "key_not_found",
+                "message": f"Signing key {key_id} not found for tenant {tenant_id_from_cert}"
+            }
+        )
+    
+    # Convert public key to PEM format
+    # First, convert JWK to public key object
+    from gateway.app.services.signer import _jwk_to_public_key
+    public_key = _jwk_to_public_key(key_data['public_jwk'])
+    
+    # Serialize to PEM
+    public_key_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode('utf-8')
+    
+    # Generate defense bundle ZIP
+    zip_bytes = generate_defense_bundle(
+        certificate=certificate,
+        public_key_pem=public_key_pem,
+        verification_report=verification_result
+    )
+    
+    # Return ZIP file
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=defense-bundle-{certificate_id}.zip"
+        }
+    )
