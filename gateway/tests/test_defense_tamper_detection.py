@@ -243,7 +243,7 @@ def test_simulate_alteration_nonexistent_certificate_returns_404(client):
 
 def test_demo_scenario_generates_complete_presentation(client):
     """
-    Test that demo scenario endpoint generates a complete courtroom presentation.
+    Test that demo scenario endpoint generates a complete tamper-evident presentation.
     """
     headers = create_clinician_headers("hospital-alpha")
     response = client.get("/v1/defense/demo-scenario", headers=headers)

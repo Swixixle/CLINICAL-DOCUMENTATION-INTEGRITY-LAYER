@@ -2,7 +2,7 @@
 """
 Defense Bundle Verifier - Offline CLI Tool
 
-This tool verifies the integrity of a courtroom defense bundle without
+This tool verifies the integrity of a tamper-evident defense bundle without
 requiring internet access or API calls.
 
 Usage:
@@ -362,7 +362,7 @@ def main():
         print(f"\n{BOLD}Usage:{RESET}")
         print(f"  python verify_bundle.py <defense_bundle.zip>\n")
         print(f"{BOLD}Description:{RESET}")
-        print("  Verify the integrity of a courtroom defense bundle offline.")
+        print("  Verify the integrity of a tamper-evident defense bundle offline.")
         print("  No internet or API access required.\n")
         print(f"{BOLD}Exit Codes:{RESET}")
         print("  0 = PASS (valid)")

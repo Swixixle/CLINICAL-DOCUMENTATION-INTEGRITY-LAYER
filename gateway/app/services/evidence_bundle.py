@@ -495,13 +495,13 @@ def generate_defense_bundle(
     verification_report: Dict[str, Any],
 ) -> bytes:
     """
-    Generate a courtroom defense bundle as a ZIP file.
+    Generate a tamper-evident defense bundle as a ZIP file.
 
-    This is the litigation-ready format with all artifacts needed for:
+    This is the audit-ready format with all artifacts needed for:
     - Legal proceedings
     - Expert witness testimony
     - Offline verification
-    - Courtroom presentation
+    - Compliance presentation
 
     Contents:
     - certificate.json: Complete certificate with all provenance fields
@@ -697,7 +697,7 @@ VALID CERTIFICATE:
 - Signature verification passes
 - All provenance fields are authentic
 - Human attestation (if present) is part of signed record
-- Suitable for courtroom presentation
+- Suitable for legal and compliance proceedings
 
 INVALID CERTIFICATE:
 - Document has been altered since certification
