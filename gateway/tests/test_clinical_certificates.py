@@ -23,6 +23,7 @@ def client():
 def test_issue_certificate_minimal(client):
     """Test issuing a certificate with minimal required fields."""
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -63,6 +64,7 @@ def test_issue_certificate_minimal(client):
 def test_issue_certificate_with_phi_fields(client):
     """Test issuing a certificate with all PHI fields (which should be hashed)."""
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v2",
         "prompt_version": "soap-note-v1.1",
         "governance_policy_version": "clinical-v2.0",
@@ -100,6 +102,7 @@ def test_certificate_chain_linkage(client):
     
     # Issue first certificate
     request1 = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -113,6 +116,7 @@ def test_certificate_chain_linkage(client):
     
     # Issue second certificate for same tenant
     request2 = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -133,6 +137,7 @@ def test_tenant_isolation(client):
     """Test that different tenants have isolated chains."""
     # Issue certificate for tenant delta
     request_delta = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -147,6 +152,7 @@ def test_tenant_isolation(client):
     
     # Issue certificate for tenant epsilon
     request_epsilon = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -171,6 +177,7 @@ def test_get_certificate(client):
     """Test retrieving a certificate by ID."""
     # First issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -206,6 +213,7 @@ def test_verify_certificate_valid(client):
     """Test verifying a valid, untampered certificate."""
     # Issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -236,6 +244,7 @@ def test_verify_certificate_tampered(client):
     
     # Issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",
@@ -298,6 +307,7 @@ def test_no_plaintext_phi_in_storage(client):
     
     # Issue a certificate with PHI
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical-v1",
         "prompt_version": "soap-note-v1.0",
         "governance_policy_version": "clinical-v1.0",

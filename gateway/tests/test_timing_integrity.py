@@ -47,6 +47,7 @@ def test_timing_integrity_backdating_detected(client):
     """Test that backdating is detected when finalized_at > ehr_referenced_at."""
     # Issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -115,6 +116,7 @@ def test_timing_integrity_valid_sequence(client):
     """Test that valid timing sequence passes verification."""
     # Issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -170,6 +172,7 @@ def test_timing_integrity_no_ehr_reference(client):
     """Test that certificate without ehr_referenced_at still passes."""
     # Issue a certificate
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v1",
@@ -200,6 +203,7 @@ def test_timing_integrity_no_ehr_reference(client):
 def test_certificate_includes_governance_fields(client):
     """Test that new governance fields are included in certificate."""
     request = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-test",
         "prompt_version": "v1.0",
         "governance_policy_version": "policy-v2.0",

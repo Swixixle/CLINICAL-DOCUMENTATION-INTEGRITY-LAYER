@@ -61,6 +61,7 @@ def test_cross_tenant_read_isolation(client):
     """
     # Issue certificate for tenant A
     request_data_a = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v1.0",
         "governance_policy_version": "clinical-v1",
@@ -100,6 +101,7 @@ def test_cross_tenant_verify_isolation(client):
     """
     # Issue certificate for tenant A
     request_data_a = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v1.0",
         "governance_policy_version": "clinical-v1",
@@ -139,6 +141,7 @@ def test_missing_tenant_header_rejected(client):
     """
     # Issue certificate first
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -166,6 +169,7 @@ def test_phi_pattern_detection_ssn(client):
     Security requirement: PHI pattern detection must reject obvious PHI.
     """
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -186,6 +190,7 @@ def test_phi_pattern_detection_phone(client):
     Security requirement: PHI pattern detection must reject phone numbers.
     """
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -206,6 +211,7 @@ def test_phi_pattern_detection_email(client):
     Security requirement: PHI pattern detection must reject email addresses.
     """
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -228,6 +234,7 @@ def test_note_text_never_persisted(client, test_db):
     sensitive_note_text = "Extremely sensitive clinical information about patient condition."
     
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -267,6 +274,7 @@ def test_patient_and_reviewer_hashed(client):
     Security requirement: All PHI fields must be hashed.
     """
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -303,6 +311,7 @@ def test_chain_integrity_per_tenant(client):
     """
     # Issue first cert for tenant A
     request_a1 = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -319,6 +328,7 @@ def test_chain_integrity_per_tenant(client):
     
     # Issue first cert for tenant B
     request_b1 = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -335,6 +345,7 @@ def test_chain_integrity_per_tenant(client):
     
     # Issue second cert for tenant A
     request_a2 = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -360,6 +371,7 @@ def test_signature_verification_valid(client):
     Security requirement: Cryptographic integrity validation.
     """
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -393,6 +405,7 @@ def test_query_certificates_tenant_isolation(client):
     """
     # Issue cert for tenant A
     request_a = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -406,6 +419,7 @@ def test_query_certificates_tenant_isolation(client):
     
     # Issue cert for tenant B
     request_b = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",

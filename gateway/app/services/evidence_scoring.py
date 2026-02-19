@@ -340,22 +340,23 @@ def score_note_defensibility(
         "flags": flags,
         "summary": summary
     }
-Evidence Scoring Engine for Shadow Mode.
 
-This module implements rule-based scoring for clinical documentation quality.
-All rules are heuristic indicators, not clinical truth or billing advice.
 
-Scoring Philosophy:
-- Start at 100 (perfect documentation)
-- Apply penalties for missing/inconsistent elements
-- All rules are auditable with rule_id + rationale
-- Focus on common denial-prone patterns (not exhaustive)
-
-IMPORTANT: These are heuristic rules for risk estimation, not:
-- Clinical decision support
-- Billing/coding advice
-- Guarantees of denial or approval
-"""
+# Evidence Scoring Engine for Shadow Mode.
+#
+# This module implements rule-based scoring for clinical documentation quality.
+# All rules are heuristic indicators, not clinical truth or billing advice.
+#
+# Scoring Philosophy:
+# - Start at 100 (perfect documentation)
+# - Apply penalties for missing/inconsistent elements
+# - All rules are auditable with rule_id + rationale
+# - Focus on common denial-prone patterns (not exhaustive)
+#
+# IMPORTANT: These are heuristic rules for risk estimation, not:
+# - Clinical decision support
+# - Billing/coding advice
+# - Guarantees of denial or approval
 
 import re
 from typing import List, Tuple

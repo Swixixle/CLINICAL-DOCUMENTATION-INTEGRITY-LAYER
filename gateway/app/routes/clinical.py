@@ -251,7 +251,23 @@ async def issue_certificate(
     
     # Step 3: Compute policy hash and generate governance summary
     policy_hash = sha256_hex(req_body.governance_policy_version.encode('utf-8'))
-    governance_summary = f"Governance policy {req_body.governance_policy_version} applied. Model: {req_body.model_version}. Human reviewed: {req_body.human_reviewed}."
+    governance_policy_hash = policy_hash  # Same value, clearer name for signing
+    governance_summary = f"Governance policy {req_body.governance_policy_version} applied. Model: {req_body.model_name} {req_body.model_version}. Human reviewed: {req_body.human_reviewed}."
+    
+    # Step 3a: Handle human attestation (Courtroom Defense Mode)
+    # If human_reviewed is true, reviewer_id is REQUIRED
+    if req_body.human_reviewed and not req_body.human_reviewer_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_reviewer_id",
+                "message": "human_reviewer_id is required when human_reviewed is true",
+                "guidance": "Provide the reviewer's identifier for attestation integrity"
+            }
+        )
+    
+    # Set attestation timestamp
+    human_attested_at_utc = timestamp if req_body.human_reviewed else None
     
     # Step 4: Get tenant's current chain head
     previous_hash = get_tenant_chain_head(tenant_id)
@@ -269,14 +285,25 @@ async def issue_certificate(
     # Step 6: Compute chain hash
     chain_hash = compute_chain_hash(certificate_data, previous_hash)
     
-    # Step 7: Build canonical message for signing
+    # Step 7: Build canonical message for signing (Courtroom Defense Mode)
+    # ALL provenance fields MUST be included in the signed message
+    # This provides complete chain of custody for litigation
+    # Note: nonce and server_timestamp will be added by sign_generic_message()
     canonical_message = {
         "certificate_id": certificate_id,
-        "tenant_id": tenant_id,
-        "timestamp": timestamp,
         "chain_hash": chain_hash,
+        "governance_policy_hash": governance_policy_hash,
+        "governance_policy_version": req_body.governance_policy_version,
+        "human_attested_at_utc": human_attested_at_utc,
+        "human_reviewed": req_body.human_reviewed,
+        "human_reviewer_id_hash": reviewer_hash,
+        "issued_at_utc": timestamp,
+        "model_name": req_body.model_name,
+        "model_version": req_body.model_version,
         "note_hash": note_hash,
-        "governance_policy_version": req_body.governance_policy_version
+        "prompt_version": req_body.prompt_version,
+        "tenant_id": tenant_id,
+        # key_id will be added by signing function based on tenant's active key
     }
     
     # Step 8: Sign the certificate with per-tenant key
@@ -288,19 +315,24 @@ async def issue_certificate(
         "certificate_id": certificate_id,
         "tenant_id": tenant_id,
         "timestamp": timestamp,
+        "issued_at_utc": timestamp,  # Same as timestamp, but explicitly named for signed field
         "finalized_at": finalized_at,
         "ehr_referenced_at": None,  # Can be set later
         "ehr_commit_id": None,  # Can be set later
+        "model_name": req_body.model_name,
         "model_version": req_body.model_version,
         "prompt_version": req_body.prompt_version,
         "governance_policy_version": req_body.governance_policy_version,
-        "policy_hash": policy_hash,
+        "governance_policy_hash": governance_policy_hash,
+        "policy_hash": policy_hash,  # Legacy field, same value
         "governance_summary": governance_summary,
         "note_hash": note_hash,
         "patient_hash": patient_hash,
-        "reviewer_hash": reviewer_hash,
-        "encounter_id": req_body.encounter_id,
+        "reviewer_hash": reviewer_hash,  # Legacy field
         "human_reviewed": req_body.human_reviewed,
+        "human_reviewer_id_hash": reviewer_hash,  # Signed field
+        "human_attested_at_utc": human_attested_at_utc,
+        "encounter_id": req_body.encounter_id,
         "integrity_chain": {
             "previous_hash": previous_hash,
             "chain_hash": chain_hash
