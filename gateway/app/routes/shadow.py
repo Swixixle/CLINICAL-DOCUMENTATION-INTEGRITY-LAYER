@@ -24,6 +24,8 @@ from gateway.app.services.evidence_scoring import score_note_defensibility
 from gateway.app.services.revenue_model import estimate_revenue_risk, calculate_annual_projection
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+"""
 Shadow Mode routes for Evidence Deficit Intelligence.
 
 Shadow Mode is a read-only analysis feature that:

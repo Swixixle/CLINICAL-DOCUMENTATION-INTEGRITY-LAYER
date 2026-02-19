@@ -510,15 +510,10 @@ async def verify_certificate(
         key_data = registry.get_key_by_id(tenant_id, key_id)
         
         if not key_data:
-            # Fallback to legacy dev key for backward compatibility
-            from pathlib import Path
-            jwk_path = Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
-            try:
-                with open(jwk_path, 'r') as f:
-                    jwk = json.load(f)
-            except Exception:
-                failures.append(fail("signature", "key_not_found"))
-                jwk = None
+            # No fallback - per-tenant keys are required for security
+            # Cross-tenant key usage would be a critical security vulnerability
+            failures.append(fail("signature", "key_not_found"))
+            jwk = None
         else:
             jwk = key_data.get("public_jwk")
         
