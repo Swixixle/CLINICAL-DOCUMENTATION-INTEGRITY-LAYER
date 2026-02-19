@@ -475,6 +475,135 @@ Shadow Mode includes evidence rules for:
 - **Acute Kidney Injury** (N17.9) - Creatinine, baseline renal function, urine output
 - **Respiratory Failure** (J96.00, J96.90) - ABG results, oxygen saturation, clinical presentation
 
+---
+
+## 🛡️ Denial Shield: Deterministic MEAT Scorer
+
+The Denial Shield MEAT Scorer is a **deterministic, explainable** risk assessment engine that evaluates clinical documentation for denial risk based on **MEAT criteria** (Monitor/Evaluate/Assess/Treat). 
+
+### What It Does
+
+Analyzes documentation for high-value diagnoses and checks for MEAT anchors:
+- **Diabetes** (Type 1 & 2)
+- **Hypertension**
+- **Congestive Heart Failure (CHF)**
+
+### Key Features
+
+✅ **Deterministic** - Same input always produces same output (no LLM calls)  
+✅ **Explainable** - Every point deduction has a stable rule_id and reason  
+✅ **Actionable** - Provides specific fix guidance for each deficit  
+✅ **Revenue-Aware** - Estimates preventable revenue loss ($142 for outpatient E/M Level 5→3 downcoding)
+
+### API Endpoint
+
+```bash
+POST /v1/shadow/evidence-deficit
+```
+
+**Request Example:**
+
+```json
+{
+  "note_text": "Patient with diabetes presents for follow-up. A1C 7.5% today...",
+  "encounter_type": "outpatient",
+  "service_line": "medicine",
+  "diagnoses": ["Type 2 diabetes mellitus"],
+  "procedures": [],
+  "labs": [],
+  "vitals": [],
+  "problem_list": ["Diabetes"],
+  "meds": ["Metformin 1000mg"]
+}
+```
+
+**Response Structure:**
+
+```json
+{
+  "evidence_sufficiency": {
+    "score": 75,
+    "band": "low",
+    "explain": [
+      {
+        "rule_id": "DIAB_MONITOR_MISSING",
+        "impact": 25,
+        "reason": "Diabetes documented but no monitoring data (glucose, A1C, CGM)"
+      }
+    ]
+  },
+  "deficits": [
+    {
+      "id": "DEF-DIAB-M",
+      "title": "Diabetes: Missing Monitor",
+      "category": "monitor",
+      "condition": "diabetes",
+      "missing": ["A1C", "glucose monitoring", "fingerstick"],
+      "fix": "Add A1C value or state CGM/fingerstick monitoring plan (frequency + target range)."
+    }
+  ],
+  "denial_risk": {
+    "score": 25,
+    "band": "low",
+    "primary_reasons": [
+      "Diabetes documented but no monitoring data (glucose, A1C, CGM)"
+    ]
+  },
+  "revenue_estimate": 0.0,
+  "headline": "Low denial risk: documentation appears sufficient for submission.",
+  "next_best_actions": [
+    "Address the missing MEAT items listed.",
+    "Add explicit clinical rationale linking assessment to plan.",
+    "Re-run Denial Shield after edits before claim submission."
+  ]
+}
+```
+
+### Risk Bands
+
+| Risk Score | Band | Meaning |
+|---|---|---|
+| 0-30 | **LOW** | Documentation appears sufficient |
+| 31-60 | **MODERATE** | Improve specificity to prevent downcoding |
+| 61-80 | **HIGH** | Missing MEAT anchors likely to trigger denials |
+| 81-100 | **CRITICAL** | Fix documentation before submission |
+
+### Scoring Rules
+
+**General Rules:**
+- Note < 400 chars: +15 risk
+- No diagnoses provided: +20 risk
+- Vague plan (e.g., "continue current", "follow up"): +10 risk
+
+**MEAT Rules (per diagnosis):**
+- Missing **Monitor**: +25 risk (e.g., no A1C for diabetes, no BP for HTN)
+- Missing **Evaluate**: +15 risk (e.g., no "controlled/uncontrolled" status)
+- Missing **Assess**: +15 risk (e.g., diagnosis not mentioned in assessment section)
+- Missing **Treat**: +25 risk (e.g., no medications documented)
+
+### Revenue Estimate
+
+- **Outpatient** encounter with **risk > 60**: $142.00 (estimated delta for Level 5→3 downcode)
+- All other scenarios: $0.00
+
+### MEAT Anchor Keywords
+
+**Diabetes:**
+- Monitor: `glucose`, `blood sugar`, `fingerstick`, `A1C`, `HbA1c`, `CGM`
+- Evaluate: `controlled`, `uncontrolled`, `at goal`, `above goal`, `improving`, `worsening`
+- Treat: `metformin`, `insulin`, `GLP-1`, `semaglutide`, `ozempic`, `dose`, `increase`, `decrease`
+
+**Hypertension:**
+- Monitor: `BP`, `blood pressure`, `home BP`, `ambulatory`, `log`
+- Evaluate: `controlled`, `uncontrolled`, `at goal`, `improving`
+- Treat: `lisinopril`, `amlodipine`, `losartan`, `HCTZ`, `metoprolol`, `carvedilol`
+
+**CHF:**
+- Monitor: `weight`, `daily weight`, `edema`, `swelling`, `I/O`, `dyspnea`
+- Evaluate: `euvolemic`, `volume overloaded`, `improving`, `worsening`, `stable`, `exacerbation`
+- Assess: `HFrEF`, `HFpEF`, `EF`, `ejection fraction`, `NYHA`
+- Treat: `furosemide`, `Lasix`, `Entresto`, `beta blocker`, `spironolactone`, `SGLT2i`, `diuretic`
+
 ### Design Principles
 
 - **Deterministic > AI** - Reviewable, rule-based logic instead of black-box ML
