@@ -20,7 +20,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, shadow
+from gateway.app.routes import health, keys, transactions, ai, clinical, mock, analytics, shadow, shadow_intake, dashboard, defense
 from gateway.app.db.migrate import ensure_schema, check_db_security
 
 
@@ -192,6 +192,9 @@ app.include_router(clinical.router)
 app.include_router(mock.router)
 app.include_router(analytics.router)
 app.include_router(shadow.router)
+app.include_router(shadow_intake.router)
+app.include_router(dashboard.router)
+app.include_router(defense.router)
 # Phase 2-4 routes (vendors, governance, gatekeeper) moved to separate PRs
 
 
