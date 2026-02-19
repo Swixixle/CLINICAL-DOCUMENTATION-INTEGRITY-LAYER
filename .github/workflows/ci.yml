@@ -79,6 +79,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install psycopg2-binary
 
     - name: Apply Postgres schema
       run: |
@@ -93,12 +94,92 @@ jobs:
       env:
         PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
 
-    - name: Run ledger integrity check against Postgres (empty ledger — PASS expected)
+    - name: Seed audit events via canonical writer path (hashes via ledger_hashing)
+      run: |
+        # NOTE: The production create_audit_event writer uses sqlite3.
+        # Direct SQL inserts are used here for Postgres CI seeding because the
+        # writer has no Postgres backend yet.  All hashes are computed only
+        # through gateway.app.db.ledger_hashing.compute_event_hash.
+        python3 - <<'EOF'
+        import json, os, sys, uuid
+        from datetime import datetime, timezone
+        sys.path.insert(0, ".")
+        import psycopg2
+        from gateway.app.db.ledger_hashing import compute_event_hash
+
+        pg_url = os.environ["PGURL"]
+        conn = psycopg2.connect(pg_url)
+        cur = conn.cursor()
+        tenant_id = "tenant_ci_test"
+        prev_hash = None
+        for i in range(3):
+            event_id = str(uuid.uuid4())
+            ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            obj_type, obj_id, action = "note", f"note_{i}", "create"
+            payload = json.dumps({"step": i})
+            event_hash = compute_event_hash(
+                prev_hash, ts, obj_type, obj_id, action, payload
+            )
+            cur.execute(
+                """
+                INSERT INTO audit_events (
+                    event_id, tenant_id, occurred_at_utc, actor_id,
+                    object_type, object_id, action, event_payload_json,
+                    prev_event_hash, event_hash
+                ) VALUES (%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s)
+                """,
+                (event_id, tenant_id, ts, obj_type, obj_id, action,
+                 payload, prev_hash, event_hash),
+            )
+            conn.commit()
+            prev_hash = event_hash
+        cur.close()
+        conn.close()
+        print("Seeded 3 audit events for tenant_ci_test")
+        EOF
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Run ledger integrity check against Postgres (seeded chain — PASS expected)
       run: |
         chmod +x ./tools/verify-ledger-integrity.sh
         ./tools/verify-ledger-integrity.sh --engine postgres --pg-url "$PGURL" --json
       env:
         PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Tamper with one audit event row
+      run: |
+        python3 - <<'EOF'
+        import os, psycopg2
+        conn = psycopg2.connect(os.environ["PGURL"])
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE audit_events SET event_payload_json = '{\"tampered\": true}'"
+            " WHERE object_id = 'note_1' AND tenant_id = 'tenant_ci_test'"
+        )
+        conn.commit()
+        cur.close(); conn.close()
+        print("Tampered note_1")
+        EOF
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+
+    - name: Ledger integrity check after tamper (FAIL expected — exit code 1)
+      run: |
+        set +e
+        ./tools/verify-ledger-integrity.sh --engine postgres --pg-url "$PGURL" --json
+        EXIT=$?
+        set -e
+        if [[ $EXIT -ne 1 ]]; then
+          echo "ERROR: Expected exit code 1 (tamper detected) but got $EXIT" >&2
+          exit 1
+        fi
+        echo "Tamper detection confirmed: verifier correctly returned exit code 1."
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
 
   smoke-test-local:
     runs-on: ubuntu-latest
