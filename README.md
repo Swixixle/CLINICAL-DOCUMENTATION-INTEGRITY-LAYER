@@ -210,6 +210,68 @@ pytest gateway/tests/test_phase1_security.py -v
 
 ---
 
+## Shadow Mode (Revenue Risk Intelligence)
+
+**Shadow Mode** enables retrospective analysis of clinical documentation to identify evidence deficits and estimate revenue at risk - **without requiring EMR integration**.
+
+### Key Features
+
+- **Evidence Sufficiency Scoring** - Deterministic, rule-based analysis of whether documentation supports assigned diagnosis codes
+- **Revenue Impact Modeling** - Transparent calculations to estimate potential claim denial risk
+- **Defensibility Dashboard** - Executive-friendly metrics showing percent defensible, percent at risk, and estimated annual revenue leakage
+- **No EMR Integration Required** - Operates on exported note batches for pilot deployments
+
+### Use Case: Preventable Revenue Loss Detection
+
+**Problem**: Documentation gaps in AI-generated notes lead to claim denials. Hospitals need to identify these gaps before claims are submitted.
+
+**Solution**: Analyze batches of notes to find documentation deficiencies.
+
+```bash
+# Analyze a batch of notes
+POST /v1/shadow/analyze
+Body: {
+  "notes": [
+    {
+      "note_text": "Patient with severe malnutrition...",
+      "diagnosis_codes": ["E43"],
+      "claim_value": 24000
+    }
+  ],
+  "average_claim_value": 20000,
+  "denial_probability": 0.08
+}
+
+# Get executive dashboard
+GET /v1/shadow/dashboard?annual_note_volume=10000
+```
+
+### Supported High-Value Diagnoses
+
+Shadow Mode includes evidence rules for:
+- **Malnutrition** (E43, E44) - BMI, albumin, weight loss, dietary assessment
+- **Sepsis** (A41.9) - SIRS criteria, infection source, labs, vitals
+- **Heart Failure** (I50.9, I50.23, I50.33) - Ejection fraction, symptoms, physical exam
+- **Acute Kidney Injury** (N17.9) - Creatinine, baseline renal function, urine output
+- **Respiratory Failure** (J96.00, J96.90) - ABG results, oxygen saturation, clinical presentation
+
+### Design Principles
+
+- **Deterministic > AI** - Reviewable, rule-based logic instead of black-box ML
+- **CFO-Readable** - Transparent revenue calculations and executive metrics
+- **Pilot-Friendly** - No infrastructure changes required
+- **Secure** - JWT authentication, tenant isolation, no PHI logging
+
+### Security
+
+- JWT authentication required for all endpoints
+- Tenant ID derived from authenticated identity (never from request)
+- Cross-tenant isolation enforced
+- No PHI stored or logged in responses
+- Rate limiting applies (disabled in test mode with ENV=TEST)
+
+---
+
 ## Next Steps (Future PRs)
 
 ### Phase 2: Vendor Registry (AI Vendors)
