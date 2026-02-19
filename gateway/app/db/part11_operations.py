@@ -11,6 +11,8 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from gateway.app.db.ledger_hashing import compute_event_hash, hash_content  # noqa: F401
+
 
 def get_utc_timestamp() -> str:
     """Get current UTC timestamp in ISO 8601 format."""
@@ -26,11 +28,6 @@ def generate_ulid() -> str:
     # For MVP, use UUID v7 style (time-ordered UUID)
     # In production, use proper ULID library
     return str(uuid.uuid4())
-
-
-def hash_content(content: str) -> str:
-    """Hash content using SHA-256."""
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def hash_with_salt(content: str, salt: str) -> str:
@@ -505,8 +502,9 @@ def create_audit_event(
     prev_event_hash = row[0] if row else None
 
     # Compute this event's hash
-    hash_input = f"{prev_event_hash or ''}{timestamp}{object_type}{object_id}{action}{payload_json}"
-    event_hash = hash_content(hash_input)
+    event_hash = compute_event_hash(
+        prev_event_hash, timestamp, object_type, object_id, action, payload_json
+    )
 
     conn.execute(
         """
@@ -593,11 +591,10 @@ def verify_audit_chain(conn: sqlite3.Connection, tenant_id: str) -> Dict[str, An
             event_hash,
         ) = event
 
-        # Recompute hash
-        hash_input = (
-            f"{prev_hash or ''}{timestamp}{obj_type}{obj_id}{action}{payload_json}"
+        # Recompute hash using canonical function
+        computed_hash = compute_event_hash(
+            prev_hash, timestamp, obj_type, obj_id, action, payload_json
         )
-        computed_hash = hash_content(hash_input)
 
         if computed_hash != event_hash:
             errors.append(
