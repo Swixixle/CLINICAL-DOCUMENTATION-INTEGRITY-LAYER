@@ -182,12 +182,63 @@ def generate_evidence_bundle(
         verify_json = json.dumps(verification_report, indent=2)
         zipf.writestr('verification_report.json', verify_json)
         
-        # Add README_VERIFICATION.txt
+        # Add public_key.pem (for offline verification with OpenSSL)
+        key_id = certificate.get("signature", {}).get("key_id")
+        if key_id:
+            try:
+                from gateway.app.services.storage import get_tenant_key_by_key_id
+                tenant_key = get_tenant_key_by_key_id(key_id)
+                if tenant_key and tenant_key.get("public_jwk_json"):
+                    # Convert JWK to PEM format
+                    import json as json_lib
+                    from cryptography.hazmat.primitives import serialization
+                    from cryptography.hazmat.primitives.asymmetric import rsa
+                    from cryptography.hazmat.backends import default_backend
+                    
+                    jwk = json_lib.loads(tenant_key["public_jwk_json"])
+                    
+                    # Extract RSA public key components from JWK
+                    if jwk.get("kty") == "RSA" and jwk.get("n") and jwk.get("e"):
+                        import base64
+                        
+                        # Decode base64url encoded values with proper padding
+                        def decode_base64url(data):
+                            """Decode base64url with automatic padding."""
+                            # Add padding if needed
+                            padding = 4 - (len(data) % 4)
+                            if padding != 4:
+                                data += '=' * padding
+                            return base64.urlsafe_b64decode(data)
+                        
+                        # Decode components
+                        n_bytes = decode_base64url(jwk["n"])
+                        e_bytes = decode_base64url(jwk["e"])
+                        
+                        # Convert to integers
+                        n = int.from_bytes(n_bytes, byteorder='big')
+                        e = int.from_bytes(e_bytes, byteorder='big')
+                        
+                        # Create RSA public key
+                        public_numbers = rsa.RSAPublicNumbers(e, n)
+                        public_key = public_numbers.public_key(default_backend())
+                        
+                        # Serialize to PEM
+                        pem_bytes = public_key.public_key_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo
+                        )
+                        
+                        zipf.writestr('public_key.pem', pem_bytes.decode('utf-8'))
+            except Exception as e:
+                # If public key extraction fails, add a note
+                zipf.writestr('public_key.pem', f"# Public key extraction failed: {str(e)}\n# Retrieve from /v1/keys/{key_id}")
+        
+        # Add README.txt (offline verification instructions)
         readme_content = generate_verification_readme(
             certificate.get('certificate_id', 'unknown'),
             verification_report.get('valid', False)
         )
-        zipf.writestr('README_VERIFICATION.txt', readme_content)
+        zipf.writestr('README.txt', readme_content)
     
     zip_bytes = buffer.getvalue()
     buffer.close()
@@ -302,6 +353,37 @@ For technical users who want to manually verify:
    - Obtain public key from issuing organization
    - Verify signature against canonical message
    - Canonical message = chain_hash + certificate core fields
+
+
+OPTION 4: OpenSSL Verification (Offline)
+-----------------------------------------
+For offline verification using OpenSSL:
+
+1. Extract the signature from certificate.json:
+   
+   cat certificate.json | jq -r '.signature.signature' > signature.b64
+   
+2. Decode the base64 signature:
+   
+   cat signature.b64 | base64 -d > signature.bin
+   
+3. Extract the canonical message (what was signed):
+   
+   # This requires reconstructing the canonical message from certificate fields
+   # See certificate.json for the exact fields and order
+   
+4. Verify the signature with OpenSSL:
+   
+   openssl dgst -sha256 -verify public_key.pem -signature signature.bin message.txt
+   
+   Expected output:
+   - "Verified OK" = PASS (signature is valid)
+   - "Verification Failure" = FAIL (signature is invalid)
+
+5. Notes:
+   - public_key.pem is included in this bundle
+   - The canonical message format is deterministic (see certificate.json)
+   - RSA-PSS with SHA-256 is the signature algorithm
 
 =================================================================
 WHAT DOES "PASS" MEAN?
