@@ -50,11 +50,14 @@ from typing import Any
 from gateway.app.models.shadow import ShadowRequest, ShadowResult
 from gateway.app.security.auth import Identity, get_current_identity
 from gateway.app.services.hashing import sha256_hex
-from gateway.app.services.evidence_scoring import score_evidence, get_score_band
+from gateway.app.services.scoring_engine import DenialShieldScorer
 from gateway.app.services.shadow_dashboard import build_dashboard_payload
 
 
 router = APIRouter(prefix="/v1/shadow", tags=["shadow-mode"])
+
+# Instantiate scorer singleton
+_SCORER = DenialShieldScorer()
 
 
 # Rate limiter instance (respects ENV=TEST for disabling in tests)
@@ -379,35 +382,15 @@ async def analyze_evidence_deficit(
     Raises:
         HTTPException: 400 for invalid input, 401 for auth failure
     """
-    # Validate encounter type
-    valid_encounter_types = {"inpatient", "observation", "outpatient", "ed"}
-    if request.encounter_type not in valid_encounter_types:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "invalid_encounter_type",
-                "message": f"encounter_type must be one of: {valid_encounter_types}"
-            }
-        )
-    
-    # Validate service line
-    valid_service_lines = {"medicine", "surgery", "icu", "other"}
-    if request.service_line not in valid_service_lines:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "invalid_service_line",
-                "message": f"service_line must be one of: {valid_service_lines}"
-            }
-        )
+    # Note: Pydantic will automatically validate enum values, so no manual validation needed
     
     # Generate request hash (for deduplication/audit, but we don't store the note)
     canonical_request = canonicalize_request(request)
     request_hash = sha256_hex(canonical_request.encode('utf-8'))
     
-    # Run evidence scoring
+    # Run evidence scoring with new DenialShieldScorer
     try:
-        score, explanations, deficits, risk_flags = score_evidence(request)
+        risk_score, sufficiency, deficits, denial_risk = _SCORER.score(request)
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -417,24 +400,58 @@ async def analyze_evidence_deficit(
             }
         )
     
-    # Determine score band
-    score_band = get_score_band(score)
-    
     # Generate timestamp
     generated_at = datetime.now(timezone.utc).isoformat()
     
-    # Build dashboard payload
-    result = build_dashboard_payload(
-        request=request,
-        tenant_id=identity.tenant_id,  # From JWT, not client input
+    # Calculate revenue estimate
+    revenue_estimate = 0.0
+    if denial_risk.score > 60 and request.encounter_type == "outpatient":
+        revenue_estimate = 142.00
+    
+    # Generate exec headline based on risk score
+    if risk_score >= 81:
+        exec_headline = "CRITICAL denial risk: fix documentation before submission."
+    elif risk_score >= 61:
+        exec_headline = "High denial risk: missing MEAT anchors likely to trigger insufficient documentation."
+    elif risk_score >= 31:
+        exec_headline = "Moderate denial risk: improve specificity to prevent downcoding/denials."
+    else:
+        exec_headline = "Low denial risk: documentation appears sufficient for submission."
+    
+    # Generate next actions (always 3 bullets)
+    next_actions = [
+        "Address the missing MEAT items listed.",
+        "Add explicit clinical rationale linking assessment to plan.",
+        "Re-run Denial Shield after edits before claim submission."
+    ]
+    
+    # Update denial_risk with revenue estimate
+    from gateway.app.models.shadow import RevenueEstimate
+    denial_risk.estimated_preventable_revenue_loss = RevenueEstimate(
+        low=revenue_estimate,
+        high=revenue_estimate,
+        assumptions=[
+            "Estimated delta between Level 5 denial/downcode to Level 3 for outpatient E/M." if revenue_estimate > 0 else "No significant revenue risk identified"
+        ]
+    )
+    
+    # Build result
+    from gateway.app.models.shadow import ShadowResult, AuditMetadata
+    result = ShadowResult(
+        tenant_id=identity.tenant_id,
         request_hash=request_hash,
         generated_at_utc=generated_at,
-        score=score,
-        score_band=score_band,
-        explanations=explanations,
+        evidence_sufficiency=sufficiency,
         deficits=deficits,
-        risk_flags=risk_flags,
-        ruleset_version="EDI-v1"
+        denial_risk=denial_risk,
+        audit=AuditMetadata(
+            ruleset_version="EDI-v1-MEAT",
+            inputs_redacted=True
+        ),
+        dashboard_title="Evidence Deficit Intelligence",
+        headline=exec_headline,
+        next_best_actions=next_actions,
+        revenue_estimate=revenue_estimate
     )
     
     return result

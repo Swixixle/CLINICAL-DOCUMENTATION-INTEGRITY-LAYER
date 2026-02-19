@@ -5,9 +5,35 @@ These models define request/response schemas for the read-only Shadow Mode
 evidence deficit analysis endpoint. No PHI is stored - only hashes and scores.
 """
 
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+
+class EncounterType(str, Enum):
+    """Encounter type classification."""
+    INPATIENT = "inpatient"
+    OBSERVATION = "observation"
+    OUTPATIENT = "outpatient"
+    ED = "ed"
+
+
+class ServiceLine(str, Enum):
+    """Service line classification."""
+    MEDICINE = "medicine"
+    SURGERY = "surgery"
+    ICU = "icu"
+    CARDIOLOGY = "cardiology"
+    OTHER = "other"
+
+
+class RiskBand(str, Enum):
+    """Risk band classification."""
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class LabResult(BaseModel):
@@ -36,8 +62,8 @@ class ShadowRequest(BaseModel):
     Security: tenant_id is derived from JWT, not from request.
     """
     note_text: str = Field(..., description="Clinical note text (will be hashed, never stored)")
-    encounter_type: str = Field(..., description="Type: inpatient|observation|outpatient|ed")
-    service_line: str = Field(..., description="Service: medicine|surgery|icu|other")
+    encounter_type: EncounterType = Field(..., description="Type: inpatient|observation|outpatient|ed")
+    service_line: ServiceLine = Field(..., description="Service: medicine|surgery|icu|cardiology|other")
     diagnoses: List[str] = Field(default_factory=list, description="List of diagnosis codes or descriptions")
     procedures: List[str] = Field(default_factory=list, description="List of procedure codes or descriptions")
     labs: List[LabResult] = Field(default_factory=list, description="Laboratory results")
@@ -72,11 +98,15 @@ class EvidenceDeficit(BaseModel):
     """Identified documentation or evidence gap."""
     id: str = Field(..., description="Unique deficit identifier (e.g., 'DEF-001')")
     title: str = Field(..., description="Brief deficit description")
-    category: str = Field(..., description="Category: documentation|coding|clinical_inconsistency")
+    category: str = Field(..., description="Category: documentation|coding|clinical_inconsistency|monitor|evaluate|assess|treat")
     why_payer_denies: str = Field(..., description="Payer perspective on why this is vulnerable")
     what_to_add: str = Field(..., description="Provider-facing guidance on what to document")
     evidence_refs: List[EvidenceReference] = Field(default_factory=list, description="Referenced evidence")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in this finding (0-1)")
+    # MEAT-specific fields (optional for non-MEAT deficits)
+    condition: Optional[str] = Field(default=None, description="Condition name for MEAT deficits (diabetes|hypertension|chf)")
+    missing: Optional[List[str]] = Field(default=None, description="List of specific missing anchors for MEAT deficits")
+    fix: Optional[str] = Field(default=None, description="Explicit one-sentence fix instruction for MEAT deficits")
 
 
 class DenialRiskFlag(BaseModel):
@@ -96,7 +126,10 @@ class RevenueEstimate(BaseModel):
 
 class DenialRisk(BaseModel):
     """Denial risk assessment."""
-    flags: List[DenialRiskFlag] = Field(..., description="List of risk flags")
+    score: int = Field(..., ge=0, le=100, description="Denial risk score (0-100, higher = higher risk)")
+    band: RiskBand = Field(..., description="Risk band: low|moderate|high|critical")
+    primary_reasons: List[str] = Field(..., description="Top 3 reasons for denial risk (by impact)")
+    flags: List[DenialRiskFlag] = Field(default_factory=list, description="List of risk flags")
     estimated_preventable_revenue_loss: RevenueEstimate = Field(..., description="Revenue at risk")
 
 
@@ -129,3 +162,4 @@ class ShadowResult(BaseModel):
     dashboard_title: str = Field(default="Evidence Deficit Intelligence", description="Dashboard title")
     headline: str = Field(..., description="Key metric headline for executives")
     next_best_actions: List[str] = Field(..., description="Top 3 recommended actions")
+    revenue_estimate: float = Field(default=0.0, ge=0, description="Estimated revenue impact (USD)")
