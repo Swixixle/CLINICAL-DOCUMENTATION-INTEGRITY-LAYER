@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -46,7 +47,7 @@ jobs:
         ENV: TEST
         DISABLE_RATE_LIMITS: "1"
 
-  docker-build:
+  smoke-test-local:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -54,25 +55,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build Docker image
-      run: |
-        docker build -t cdil-gateway:ci-test .
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
     
-    - name: Test Docker image
+    - name: Install dependencies
       run: |
-        # Start container in background
-        docker run -d --name cdil-test \
-          -e JWT_SECRET_KEY=test-secret-key \
-          -e CDIL_DB_PATH=/data/test.db \
-          -p 8000:8000 \
-          cdil-gateway:ci-test
-        
-        # Wait for container to be ready
-        sleep 10
-        
-        # Test health endpoint
-        curl -f http://localhost:8000/v1/health/status || exit 1
-        
-        # Cleanup
-        docker stop cdil-test
-        docker rm cdil-test
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run local smoke test
+      run: |
+        chmod +x ./tools/smoke-test-local.sh
+        ./tools/smoke-test-local.sh
+
+  smoke-test-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Docker smoke test
+      run: |
+        chmod +x ./tools/smoke-test-docker.sh
+        ./tools/smoke-test-docker.sh
