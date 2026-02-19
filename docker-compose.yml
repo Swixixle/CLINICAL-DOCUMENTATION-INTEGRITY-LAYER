@@ -58,6 +58,49 @@ services:
     user: "1000:1000"
     
     # Resource limits (adjust based on your needs)
+services:
+  cdil-gateway:
+    build: .
+    image: cdil-gateway:latest
+    container_name: cdil-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      # REQUIRED: JWT secret key for authentication
+      # Generate with: openssl rand -base64 32
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      
+      # Optional: Database path (defaults to /app/data/cdil.db)
+      - CDIL_DB_PATH=/app/data/cdil.db
+      
+      # Optional: Enable note text storage (default: false for PHI safety)
+      # WARNING: Only enable if you have proper PHI controls in place
+      - STORE_NOTE_TEXT=${STORE_NOTE_TEXT:-false}
+      
+      # Optional: Environment name (development, staging, production)
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      
+      # Optional: Disable rate limiting (for testing only)
+      # - DISABLE_RATE_LIMITS=0
+    volumes:
+      # Persist database
+      - cdil-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health/status', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - cdil-network
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Resource limits
     deploy:
       resources:
         limits:
@@ -66,6 +109,10 @@ services:
         reservations:
           cpus: '0.5'
           memory: 1G
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   cdil-data:
@@ -74,3 +121,59 @@ volumes:
 networks:
   cdil-network:
     driver: bridge
+
+# ==============================================================================
+# DEPLOYMENT NOTES
+# ==============================================================================
+#
+# REQUIRED ENVIRONMENT VARIABLES:
+# 
+# JWT_SECRET_KEY:
+#   - Generate with: openssl rand -base64 32
+#   - Store securely (use secrets management in production)
+#   - Example: export JWT_SECRET_KEY=$(openssl rand -base64 32)
+#
+# OPTIONAL ENVIRONMENT VARIABLES:
+#
+# STORE_NOTE_TEXT:
+#   - Default: false (PHI-safe: only hashes stored)
+#   - Set to "true" to store full note text (requires PHI controls)
+#
+# ENVIRONMENT:
+#   - Default: production
+#   - Options: development, staging, production
+#
+# ==============================================================================
+# DEPLOYMENT CHECKLIST
+# ==============================================================================
+#
+# [ ] Generate and set JWT_SECRET_KEY
+# [ ] Review and configure environment variables
+# [ ] Set up TLS termination (nginx, traefik, or cloud LB)
+# [ ] Configure logging and monitoring
+# [ ] Set up database backups (backup /app/data/cdil.db)
+# [ ] Review security options and resource limits
+# [ ] Test health checks are working
+# [ ] Set up key rotation process
+# [ ] Configure logging redaction for PHI
+# [ ] Review network security and firewall rules
+# [ ] Set up alerting for security events
+#
+# ==============================================================================
+# RUNNING THE SERVICE
+# ==============================================================================
+#
+# Start the service:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f cdil-gateway
+#
+# Stop the service:
+#   docker-compose down
+#
+# Backup database:
+#   docker-compose exec cdil-gateway sqlite3 /app/data/cdil.db ".backup /app/data/backup.db"
+#   docker cp cdil-gateway:/app/data/backup.db ./backup-$(date +%Y%m%d).db
+#
+# ==============================================================================

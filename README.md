@@ -5,6 +5,17 @@
 ## What CDIL Is
 
 CDIL is a **cryptographically verifiable documentation integrity and audit reconstruction engine** for AI-generated clinical notes.
+CDIL is a **Verifiable Evidence Layer** for AI-generated clinical documentation. This implementation provides:
+
+1. **Shadow Mode Sidecar** - Run alongside existing workflows without EMR integration
+2. **Defense Bundles** - Litigation-grade, payer/audit-ready evidence artifacts
+3. **Executive Dashboard** - Proof-of-concept metrics that answer exec questions in 10 seconds
+
+**Primary Use Cases:**
+- Shadow Mode pilot deployments (no EMR integration required)
+- Export evidence bundles for payer appeals, litigation, and compliance audits
+- Documentation quality analysis and risk identification
+- Cryptographic proof of integrity for AI-generated clinical notes
 
 **Value Proposition (Pick One):**
 
@@ -52,6 +63,53 @@ This implementation focuses exclusively on **Evidence Bundle Export** and **Shad
 - **Evidence Bundles (JSON)** - Structured bundles with certificate, verification instructions, and public key references
 - **Evidence Bundles (ZIP)** - Complete archive with certificate.json, certificate.pdf, evidence_bundle.json, verification_report.json
 - **Per-Tenant Keys** - Cryptographic isolation across organizations (no cross-tenant forgery)
+## 🎯 Shadow Mode: The Most Incredible Sidecar
+
+CDIL can run **alongside** existing documentation workflows (AI or non-AI) without requiring Epic integration. This makes it perfect for specialist pilots and proof-of-concept deployments.
+
+### What Shadow Mode Does
+
+**Ingest & Analyze (Read-Only):**
+- `POST /v1/shadow/intake` - Ingest clinical notes for retrospective analysis
+- PHI-safe by default: only hashes stored (plaintext NOT stored unless explicitly configured)
+- Tenant-isolated: per-organization cryptographic keys and data separation
+
+**Issue Verifiable Certificates:**
+- Cryptographically signed integrity certificates
+- SHA-256 hashing of note content
+- Tamper-evident with offline verification support
+
+**Export Defense Bundles:**
+- `GET /v1/certificates/{id}/evidence-bundle.zip` - Complete evidence package
+- Includes: certificate.json, certificate.pdf, verification_report.json, public_key.pem, README.txt
+- OpenSSL-compatible offline verification
+- Courtroom/appeal-ready artifacts
+
+**Surface Outcomes via Dashboard:**
+- `GET /v1/dashboard/executive-summary` - Notes reviewed, risk indicators, defensibility metrics
+- `GET /v1/dashboard/risk-queue` - Prioritized worklist for CDI specialists
+- `POST /v1/defense/simulate-alteration` - Proof demo (PASS original, FAIL mutated)
+
+### Shadow Mode Benefits
+
+✅ **No EMR Integration Required** - Pilot without vendor dependencies  
+✅ **PHI-Safe by Default** - Only hashes stored, not plaintext  
+✅ **Litigation-Grade Evidence** - Cryptographically verifiable bundles  
+✅ **Executive Dashboard** - Prove it works in 10 seconds  
+✅ **Tenant Isolation** - Per-organization keys and data separation  
+✅ **Offline Verification** - No API required to verify integrity  
+
+---
+
+## Phase 1 Scope (This PR)
+
+This implementation focuses on **Shadow Mode Sidecar + Evidence Bundle Export + Executive Dashboard**:
+
+- **Shadow Mode Ingestion** - Read-only note intake with PHI-safe hashing
+- **Evidence Bundles (JSON)** - Structured bundles with certificate, verification instructions, and public key references
+- **Evidence Bundles (ZIP)** - Complete archive with certificate.json, certificate.pdf, evidence_bundle.json, verification_report.json, README.txt, public_key.pem
+- **Executive Dashboard** - Summary metrics, risk queue, and defense simulation
+- **Per-Tenant Keys** - Cryptographic isolation across organizations
 - **Offline Verification** - Bundles can be verified without API access
 
 ### Shadow Mode (Revenue Intelligence)
@@ -69,22 +127,108 @@ These features will be implemented in separate PRs with dedicated threat models,
 
 ---
 
+## 🚀 Quick Start: Shadow Mode Pilot
+
+### 1. Deploy with Docker Compose
+
+```bash
+# Generate JWT secret
+export JWT_SECRET_KEY=$(openssl rand -base64 32)
+
+# Start CDIL
+docker-compose up -d
+
+# Check health
+curl http://localhost:8000/v1/health/status
+```
+
+### 2. Ingest Clinical Notes (Shadow Mode)
+
+```bash
+# Get JWT token (in production, use proper authentication)
+TOKEN="your-jwt-token"
+
+# Ingest a note
+curl -X POST http://localhost:8000/v1/shadow/intake \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note_text": "Patient presents with acute chest pain...",
+    "encounter_id": "ENC-12345",
+    "note_type": "progress"
+  }'
+
+# Response includes shadow_id, note_hash, timestamp
+```
+
+### 3. View Executive Dashboard
+
+```bash
+# Get summary metrics
+curl http://localhost:8000/v1/dashboard/executive-summary \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get risk queue (high-risk notes needing review)
+curl http://localhost:8000/v1/dashboard/risk-queue?band=HIGH \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 4. Issue Certificates & Export Bundles
+
+```bash
+# Issue certificate for AI-generated note
+curl -X POST http://localhost:8000/v1/clinical/documentation \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note_text": "Patient presents with...",
+    "model_version": "gpt-4-medical-v1",
+    "patient_hash": "..."
+  }'
+
+# Export defense bundle (ZIP)
+curl http://localhost:8000/v1/certificates/{cert-id}/evidence-bundle.zip \
+  -H "Authorization: Bearer $TOKEN" \
+  -o evidence-bundle.zip
+```
+
+### 5. Demonstrate Tamper Detection
+
+```bash
+# Simulate alteration to show PASS vs FAIL
+curl -X POST http://localhost:8000/v1/defense/simulate-alteration \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "certificate_id": "cert-123",
+    "mutated_note_text": "Patient presents with ALTERED CONTENT..."
+  }'
+
+# Response shows:
+# - Original: PASS (integrity confirmed)
+# - Mutated: FAIL (hash mismatch detected)
+# - Explanation of what broke and why
+```
+
+---
+
 ## 📋 Security Documentation
 
 **Phase 1 Security Boundaries:**
 - Per-tenant cryptographic keys (no cross-tenant forgery)
-- PHI properly hashed, never stored in plaintext
+- PHI properly hashed, never stored in plaintext (unless STORE_NOTE_TEXT=true)
 - Tenant isolation at API and DB layers
 - Nonce-based replay protection
 - Role-based access control (clinician, auditor, admin)
 
 **For detailed security analysis, see:**
+- [Deployment Hardening Guide](./docs/DEPLOYMENT_HARDENING.md) - TLS, key rotation, logging, backups, hospital network deployment
 - [Integrity Artifact Spec](./docs/INTEGRITY_ARTIFACT_SPEC.md) - Canonical formats for certificates and evidence bundles
 - [Threat Model & Trust Guarantees](./docs/THREAT_MODEL_AND_TRUST_GUARANTEES.md) - Security contract, attacker model, STRIDE analysis
 
 **Known Limitations:**
-- This is a Phase 1 implementation focused on evidence export
-- Production deployment requires additional hardening (see threat model)
+- This is a Phase 1 implementation focused on Shadow Mode and evidence export
+- Production deployment requires additional hardening (see Deployment Hardening Guide)
 - Security testing is ongoing
 
 ---

@@ -28,17 +28,18 @@ from slowapi.util import get_remote_address
 """
 Shadow Mode routes for Evidence Deficit Intelligence.
 
-Shadow Mode is a read-only analysis feature that:
-- Analyzes clinical notes + structured context
-- Identifies documentation deficits and denial risks
-- Provides actionable recommendations
-- Does NOT write back to EHR or store PHI
-
-Security:
-- JWT authentication required (tenant_id from JWT, never from request)
-- Rate limiting to prevent abuse
-- No PHI storage (only hashes and aggregates)
-"""
+# Shadow Mode routes for Evidence Deficit Intelligence.
+#
+# Shadow Mode is a read-only analysis feature that:
+# - Analyzes clinical notes + structured context
+# - Identifies documentation deficits and denial risks
+# - Provides actionable recommendations
+# - Does NOT write back to EHR or store PHI
+#
+# Security:
+# - JWT authentication required (tenant_id from JWT, never from request)
+# - Rate limiting to prevent abuse
+# - No PHI storage (only hashes and aggregates)
 
 import os
 import json
@@ -288,6 +289,8 @@ async def get_dashboard(
         tenant_id=tenant_id,
         generated_at=datetime.now(timezone.utc).isoformat()
     )
+
+
 def canonicalize_request(request: ShadowRequest) -> str:
     """
     Canonicalize request for hashing.
