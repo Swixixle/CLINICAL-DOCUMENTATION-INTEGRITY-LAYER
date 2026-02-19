@@ -9,8 +9,7 @@ No LLM calls, no ambiguous behavior.
 """
 
 import re
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 from gateway.app.models.shadow import (
     ShadowRequest,
@@ -18,10 +17,8 @@ from gateway.app.models.shadow import (
     ScoreExplanation,
     EvidenceDeficit,
     DenialRisk,
-    DenialRiskFlag,
     RevenueEstimate,
     EvidenceReference,
-    EncounterType,
     RiskBand,
 )
 

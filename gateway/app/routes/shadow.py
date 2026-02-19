@@ -16,7 +16,7 @@ Security Model:
 import os
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -35,7 +35,7 @@ from gateway.app.models.shadow import (
 )
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.scoring_engine import DenialShieldScorer
-from gateway.app.services.shadow_dashboard import build_dashboard_payload
+from gateway.app.services.evidence_scoring import score_note_defensibility
 
 router = APIRouter(prefix="/v1/shadow", tags=["shadow-mode"])
 

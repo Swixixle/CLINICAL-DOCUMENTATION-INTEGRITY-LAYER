@@ -7,8 +7,7 @@ evidence deficit analysis endpoint. No PHI is stored - only hashes and scores.
 
 from enum import Enum
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from typing import Optional, List, Any
 
 
 class EncounterType(str, Enum):
