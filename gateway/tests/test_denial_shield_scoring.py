@@ -311,8 +311,8 @@ def test_revenue_estimate_outpatient_high_risk(client):
     # Verify risk is still high
     assert data_inpatient["denial_risk"]["score"] > 60
 
-    # Verify revenue estimate is $0 for inpatient
-    assert data_inpatient["revenue_estimate"] == 0.00
+    # Verify revenue estimate is $500 for inpatient (per revenue_mapping.json)
+    assert data_inpatient["revenue_estimate"] == 500.00
 
 
 def test_enum_validation_encounter_type(client):
