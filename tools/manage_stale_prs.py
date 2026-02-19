@@ -101,8 +101,10 @@ def is_stale_pr(pr: Dict[str, Any], days_threshold: int) -> bool:
     if "[WIP]" not in pr["title"]:
         return False
 
-    # Must be from Copilot
-    if pr["author"]["login"] != "Copilot":
+    # Must be from Copilot (case-insensitive check)
+    # In this repository, GitHub Copilot PRs use the login "Copilot"
+    author_login = pr["author"]["login"].lower()
+    if author_login not in ("copilot", "github-copilot[bot]", "copilot[bot]"):
         return False
 
     # Check last update time
