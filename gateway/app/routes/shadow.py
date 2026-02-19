@@ -24,7 +24,12 @@ from slowapi.util import get_remote_address
 
 from gateway.app.security.auth import Identity, get_current_identity
 from gateway.app.services.revenue_model import estimate_revenue_risk, calculate_annual_projection
-from gateway.app.models.shadow import ShadowRequest, ShadowResult
+from gateway.app.models.shadow import (
+    ShadowRequest, 
+    ShadowResult, 
+    RevenueEstimate, 
+    AuditMetadata
+)
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.scoring_engine import DenialShieldScorer
 from gateway.app.services.shadow_dashboard import build_dashboard_payload
@@ -402,7 +407,6 @@ async def analyze_evidence_deficit(
     ]
     
     # Update denial_risk with revenue estimate
-    from gateway.app.models.shadow import RevenueEstimate
     denial_risk.estimated_preventable_revenue_loss = RevenueEstimate(
         low=revenue_estimate,
         high=revenue_estimate,
@@ -412,7 +416,6 @@ async def analyze_evidence_deficit(
     )
     
     # Build result
-    from gateway.app.models.shadow import ShadowResult, AuditMetadata
     result = ShadowResult(
         tenant_id=identity.tenant_id,
         request_hash=request_hash,

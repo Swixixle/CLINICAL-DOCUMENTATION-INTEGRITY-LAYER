@@ -79,6 +79,9 @@ DIABETES_ASSESS = [
 DIABETES_TREAT = [
     "metformin", "insulin", "glp-1", "semaglutide", "ozempic", 
     "tirzepatide", "mounjaro", "dose", "increase", "decrease", "continue"
+    # Note: Generic action words like "increase", "decrease", "continue" may match
+    # unintended contexts (e.g., "symptoms increased"). This is a known limitation
+    # of simple keyword matching. Future enhancements should use context-aware matching.
 ]
 
 # Hypertension anchors
@@ -97,6 +100,8 @@ HTN_ASSESS = [
 HTN_TREAT = [
     "lisinopril", "amlodipine", "losartan", "hctz", "hydrochlorothiazide",
     "metoprolol", "carvedilol", "start", "continue", "increase", "decrease"
+    # Note: Generic action words may cause false positives. V2 should implement
+    # context-aware matching or require co-occurrence with medication names.
 ]
 
 # CHF anchors
@@ -116,6 +121,8 @@ CHF_TREAT = [
     "furosemide", "lasix", "bumetanide", "torsemide", "entresto", "sacubitril",
     "valsartan", "beta blocker", "spironolactone", "sglt2", "dapagliflozin",
     "empagliflozin", "diuretic", "dose", "increase", "decrease"
+    # Note: "dose", "increase", "decrease" are generic and may match unrelated contexts.
+    # Future versions should use more specific patterns or context windows.
 ]
 
 # Vague plan indicators
