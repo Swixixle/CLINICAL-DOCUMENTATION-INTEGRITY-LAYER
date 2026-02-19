@@ -280,3 +280,47 @@ def test_init_tenant_vault_report_contains_fingerprints():
         # Check base64 format
         b64_match = re.search(r"Public Key SHA-256 \(base64\): ([A-Za-z0-9+/=]+)", report)
         assert b64_match is not None
+
+
+def test_init_tenant_vault_explicit_kdf_parameters():
+    """Test that explicit KDF parameters are documented for audit compliance."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        passphrase = "test-passphrase-minimum-16chars"
+        
+        result = subprocess.run(
+            [
+                sys.executable,
+                "tools/init-tenant-vault.py",
+                "--tenant", "test-clinic",
+                "--out-dir", tmpdir,
+            ],
+            env={**os.environ, "TENANT_VAULT_PASSPHRASE": passphrase},
+            capture_output=True,
+            text=True,
+        )
+        
+        assert result.returncode == 0
+        
+        tenant_dir = Path(tmpdir) / "test-clinic"
+        report = (tenant_dir / "readiness_report.txt").read_text()
+        
+        # Check report contains explicit KDF information
+        assert "ENCRYPTION PARAMETERS (EXPLICIT FOR AUDIT)" in report
+        assert "PBKDF2HMAC" in report
+        assert "600,000" in report or "600000" in report
+        assert "AES-256-CBC" in report
+        assert "SHA-256" in report
+        assert "AUDIT-OPTIMAL" in report
+        
+        # Check KDF parameters file exists
+        kdf_file = tenant_dir / "kdf_parameters.txt"
+        assert kdf_file.exists()
+        
+        kdf_content = kdf_file.read_text()
+        assert "KDF PARAMETERS" in kdf_content
+        assert "PBKDF2HMAC" in kdf_content
+        assert "600,000" in kdf_content or "600000" in kdf_content
+        assert "AES-256-CBC" in kdf_content
+        assert "NIST SP 800-132" in kdf_content
+        assert "OWASP 2023" in kdf_content
+        assert "COMPLIANCE NOTES" in kdf_content

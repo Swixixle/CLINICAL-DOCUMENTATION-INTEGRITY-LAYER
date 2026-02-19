@@ -93,7 +93,7 @@ export PYTHONPATH=/path/to/CLINICAL-DOCUMENTATION-INTEGRITY-LAYER
 
 ## Tenant Vault Initialization
 
-The `init-tenant-vault.py` tool generates tenant-scoped RSA-4096 keypairs for signing and verification with encrypted private keys.
+The `init-tenant-vault.py` tool generates tenant-scoped RSA-4096 keypairs for signing and verification with encrypted private keys. **Now with explicit KDF parameters for institutional audit compliance.**
 
 ### Usage
 
@@ -121,10 +121,11 @@ TENANT_VAULT_PASSPHRASE="your-strong-passphrase-here" \
 ### What it Does
 
 1. **Generates RSA-4096 keypair**: Strong cryptographic keys suitable for long-term use
-2. **Encrypts private key**: Uses PBKDF2 + AES-256 encryption via cryptography library's BestAvailableEncryption
-3. **Creates tenant directory**: Output files are organized by tenant slug (normalized from tenant name)
-4. **Sets secure permissions**: Private key gets 0600 permissions (owner read/write only)
-5. **Generates readiness report**: Includes public key fingerprints and operational guidance
+2. **Encrypts private key**: Uses **explicit PBKDF2HMAC-SHA256 + AES-256-CBC** with 600,000 iterations (OWASP 2023 compliant)
+3. **Documents KDF parameters**: Creates detailed cryptographic parameter log for institutional audits
+4. **Creates tenant directory**: Output files are organized by tenant slug (normalized from tenant name)
+5. **Sets secure permissions**: Private key gets 0600 permissions (owner read/write only)
+6. **Generates readiness report**: Includes public key fingerprints, KDF parameters, and operational guidance
 
 ### Output Files
 
@@ -135,8 +136,21 @@ tenant_vault/
 └── acme-clinic/
     ├── tenant_private_key.pem    # Encrypted private key (0600 permissions)
     ├── tenant_public_key.pem     # Public key (0644 permissions)
-    └── readiness_report.txt      # System readiness report with key fingerprints
+    ├── readiness_report.txt      # System readiness report with key fingerprints
+    └── kdf_parameters.txt        # Explicit KDF parameters for audit
 ```
+
+### Audit-Optimal Features (NEW)
+
+The tool now provides **explicit cryptographic parameters** for institutional audits:
+
+- **Key Derivation Function**: PBKDF2HMAC with SHA-256
+- **Iterations**: 600,000 (meets OWASP 2023 recommendations)
+- **Encryption**: AES-256-CBC (FIPS 140-2 approved)
+- **Salt**: 16 bytes cryptographically random (unique per key)
+- **Documentation**: All parameters logged in `kdf_parameters.txt`
+
+This makes the system defensible for FDA 21 CFR Part 11 and other regulatory audits where "implicit security" (e.g., `BestAvailableEncryption`) is harder to document.
 
 ### Security Notes
 
@@ -150,6 +164,151 @@ tenant_vault/
 
 - Python 3.12+
 - `cryptography` library (included in requirements.txt)
+
+---
+
+## Ledger Integrity Verification
+
+The `verify-ledger-integrity.sh` script cryptographically verifies the integrity of the audit event ledger. This is a **critical compliance tool for FDA 21 CFR Part 11** audit requirements.
+
+### What it Verifies
+
+1. **Hash Integrity**: Each audit event's hash matches its recomputed value
+2. **Chain Linkage**: The hash chain is intact (prev_event_hash consistency)
+3. **Tamper Detection**: No events have been modified or deleted
+
+### Usage
+
+```bash
+# Verify entire ledger
+./tools/verify-ledger-integrity.sh
+
+# Verify specific database
+./tools/verify-ledger-integrity.sh --db /path/to/production.db
+
+# Verify single tenant only
+./tools/verify-ledger-integrity.sh --tenant tenant_12345
+
+# Verbose output (shows each event)
+./tools/verify-ledger-integrity.sh --verbose
+
+# JSON output (for automation)
+./tools/verify-ledger-integrity.sh --json
+```
+
+### Options
+
+- `--db PATH`: Path to SQLite database (default: `gateway/app/data/part11.db`)
+- `--tenant ID`: Verify only specific tenant (default: all tenants)
+- `--verbose`: Show detailed event-by-event verification
+- `--json`: Output results as JSON for automation/integration
+
+### Exit Codes
+
+- **0**: Ledger integrity verified (no tampering detected)
+- **1**: Ledger integrity FAILED (tampering detected)
+- **2**: Database not found or inaccessible
+- **3**: Invalid arguments
+
+### Example Output
+
+#### ✅ Valid Ledger
+```
+═══════════════════════════════════════════════════════════════
+   ✓ LEDGER INTEGRITY VERIFIED
+═══════════════════════════════════════════════════════════════
+
+Total Events:     1,247
+Verified Events:  1,247
+Tenants:          3
+Integrity Status: INTACT
+
+No tampering detected. All audit events are cryptographically valid.
+
+This ledger is defensible for regulatory audit.
+```
+
+#### ❌ Tampered Ledger
+```
+═══════════════════════════════════════════════════════════════
+   ✗ LEDGER INTEGRITY VIOLATION DETECTED
+═══════════════════════════════════════════════════════════════
+
+Total Events:     1,247
+Verified Events:  1,246
+Tenants:          3
+Errors Found:     1
+
+⚠ WARNING: The audit ledger has been compromised.
+
+Errors:
+  1. Event: a630f753-bb8d-43...
+     Error: Hash mismatch - event has been tampered with
+     Time: 2026-02-19T10:55:50.485466Z
+
+RECOMMENDED ACTIONS:
+  1. Immediately secure the database and investigate unauthorized access
+  2. Review system access logs for the timeframes of compromised events
+  3. Notify your compliance officer and security team
+  4. Restore from the last verified backup if available
+  5. Document this incident per your breach response procedures
+```
+
+### When to Run
+
+- **Before board presentations**: Prove audit trail integrity
+- **During regulatory audits**: Demonstrate tamper-evidence
+- **After security incidents**: Verify ledger hasn't been compromised
+- **Scheduled checks**: Regular integrity validation (e.g., daily)
+- **Before system handoff**: Verify integrity before transferring custody
+
+### Automation Example
+
+```bash
+#!/bin/bash
+# Daily integrity check with alerting
+
+if ! ./tools/verify-ledger-integrity.sh --json > /tmp/integrity.json; then
+  # Ledger compromised - send alert
+  cat /tmp/integrity.json | mail -s "CRITICAL: Audit Ledger Tampered" security@example.com
+  exit 1
+fi
+
+echo "Ledger integrity verified"
+```
+
+### CI Integration
+
+The verification script can be added to your CI/CD pipeline:
+
+```yaml
+- name: Verify Audit Ledger Integrity
+  run: |
+    ./tools/verify-ledger-integrity.sh --db test.db
+```
+
+### Regulatory Compliance
+
+This tool supports:
+- **FDA 21 CFR Part 11**: Secure, tamper-evident audit trails
+- **HIPAA**: Audit and accountability requirements
+- **ISO 27001**: Event logging and monitoring
+- **SOC 2**: System operation integrity
+
+### Technical Details
+
+The script uses cryptographic hash chaining:
+- Each event includes `SHA-256(prev_hash || timestamp || object_type || object_id || action || payload)`
+- Events are linked in a tamper-evident chain
+- Any modification breaks the chain and is immediately detected
+
+### Requirements
+
+- Python 3.7+
+- SQLite3
+- Bash shell
+
+---
 
 ## Other Tools
 
