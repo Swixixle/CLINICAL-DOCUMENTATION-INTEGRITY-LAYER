@@ -1037,13 +1037,13 @@ async def get_defense_bundle(
     identity: Identity = Depends(get_current_identity),
 ) -> Response:
     """
-    Generate and return courtroom defense bundle as ZIP archive.
+    Generate and return tamper-evident defense bundle as ZIP archive.
 
-    This is the LITIGATION-READY format with all artifacts needed for:
+    This is the AUDIT-READY format with all artifacts needed for:
     - Legal proceedings
     - Expert witness testimony
     - Offline verification
-    - Courtroom presentation
+    - Compliance presentation
 
     SECURITY: Requires JWT authentication.
     Enforces tenant isolation - returns 404 for cross-tenant access.

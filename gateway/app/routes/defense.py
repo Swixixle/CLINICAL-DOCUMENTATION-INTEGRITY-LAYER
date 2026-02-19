@@ -25,7 +25,7 @@ from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.signer import verify_signature
 from gateway.app.db.migrate import get_connection
 
-router = APIRouter(prefix="/v1/defense", tags=["courtroom-defense"])
+router = APIRouter(prefix="/v1/defense", tags=["tamper-evident-defense"])
 
 
 class SimulateAlterationRequest(BaseModel):
@@ -232,7 +232,7 @@ async def demo_scenario(
     identity: Identity = Depends(get_current_identity),
 ) -> Dict[str, Any]:
     """
-    Generate a demonstration scenario for courtroom defense presentation.
+    Generate a demonstration scenario for tamper-evident defense presentation.
 
     This endpoint provides a pre-packaged demo showing:
     1. Original certificate (valid)
@@ -328,7 +328,7 @@ async def demo_scenario(
         "legal_implications": (
             "CDIL provides cryptographic proof that this document was altered after certification. "
             "The original certified version can be definitively distinguished from any modifications. "
-            "This evidence is suitable for courtroom presentation and expert witness testimony."
+            "This evidence is audit-ready and suitable for legal proceedings and expert witness testimony."
         ),
     }
 

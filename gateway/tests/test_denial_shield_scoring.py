@@ -300,7 +300,7 @@ def test_revenue_estimate_outpatient_high_risk(client):
     # Verify revenue estimate is $142
     assert data_outpatient["revenue_estimate"] == 142.00
 
-    # Test 2: Inpatient with same high risk
+    # Test 2: Inpatient with same high risk -> should return 0.00 (no rule configured)
     failing_note["encounter_type"] = "inpatient"
     response_inpatient = client.post(
         "/v1/shadow/evidence-deficit", json=failing_note, headers=headers
@@ -311,8 +311,8 @@ def test_revenue_estimate_outpatient_high_risk(client):
     # Verify risk is still high
     assert data_inpatient["denial_risk"]["score"] > 60
 
-    # Verify revenue estimate is $500 for inpatient (per revenue_mapping.json)
-    assert data_inpatient["revenue_estimate"] == 500.00
+    # Verify revenue estimate is $0 for inpatient (no rule in revenue_mapping.json per requirements)
+    assert data_inpatient["revenue_estimate"] == 0.00
 
 
 def test_enum_validation_encounter_type(client):
@@ -466,3 +466,306 @@ def test_next_actions_always_three(client):
     assert any("MEAT" in action for action in actions)
     assert any("clinical rationale" in action for action in actions)
     assert any("Re-run" in action or "re-run" in action for action in actions)
+
+
+def test_sepsis_good_note_low_risk(client):
+    """
+    Test sepsis with complete MEAT documentation -> low/moderate risk.
+    """
+    good_sepsis_note = {
+        "note_text": """
+        Patient with sepsis from suspected UTI. Vitals show fever 101.2F, BP 110/70, MAP 85.
+        Lactate 2.1, WBC 15k, blood cultures pending. CXR clear. Suspected source UTI.
+        Organ dysfunction present with AKI (Cr 1.8 from baseline 0.9).
+        Assessment: Sepsis with organ dysfunction (AKI), SOFA score 3.
+        Plan: Started broad-spectrum antibiotics (vancomycin 1g IV, zosyn 4.5g IV).
+        30 ml/kg fluid resuscitation initiated. Monitor lactate trend and urine output.
+        """,
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Sepsis", "UTI", "AKI"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=good_sepsis_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have low to moderate risk since all MEAT anchors present
+    assert data["denial_risk"]["score"] <= 60
+
+
+def test_sepsis_missing_meat_high_risk(client):
+    """
+    Test sepsis with missing MEAT anchors -> high risk.
+    """
+    bad_sepsis_note = {
+        "note_text": "Patient has sepsis. Continue antibiotics.",  # Missing most MEAT
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Sepsis"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=bad_sepsis_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have high risk (missing M=25, E=15, A=15, T=25 = 80+)
+    assert data["denial_risk"]["score"] >= 61
+
+    # Verify deficits include sepsis-specific items
+    deficits = data["deficits"]
+    deficit_conditions = [d.get("condition") for d in deficits if d.get("condition")]
+    assert "sepsis" in deficit_conditions
+
+
+def test_sepsis_false_positive_guard(client):
+    """
+    Test sepsis detection is based on diagnosis list OR note text.
+    This test verifies that sepsis is only flagged when actually diagnosed.
+    """
+    # Note without sepsis diagnosis - even if word 'septic' appears in different context
+    note_without_sepsis_dx = {
+        "note_text": "Patient with diabetes. Blood sugar well controlled.",
+        "encounter_type": "outpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Diabetes", "Hypertension"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=note_without_sepsis_dx, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should not have sepsis-related deficits since sepsis not in diagnoses
+    deficits = data["deficits"]
+    deficit_conditions = [d.get("condition") for d in deficits if d.get("condition")]
+    assert "sepsis" not in deficit_conditions
+
+
+def test_arf_good_note_low_risk(client):
+    """
+    Test acute respiratory failure with complete MEAT -> low/moderate risk.
+    """
+    good_arf_note = {
+        "note_text": """
+        Patient with acute hypoxic respiratory failure. SpO2 88% on room air, improved to 95% on NC 4L.
+        ABG shows pO2 65, pCO2 38. Respiratory rate 24, work of breathing increased.
+        CXR shows bilateral infiltrates. 
+        Assessment: Acute hypoxic respiratory failure type 1, likely pneumonia.
+        Plan: O2 via nasal cannula, titrate to SpO2 >92%. Consider HFNC if worsening.
+        """,
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Acute respiratory failure", "Pneumonia"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=good_arf_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have low to moderate risk
+    assert data["denial_risk"]["score"] <= 60
+
+
+def test_arf_missing_meat_high_risk(client):
+    """
+    Test ARF with missing MEAT -> high risk.
+    """
+    bad_arf_note = {
+        "note_text": "Patient has respiratory failure. Continue current management.",
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Respiratory failure"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=bad_arf_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have high risk
+    assert data["denial_risk"]["score"] >= 61
+
+    # Verify deficits include ARF-specific items
+    deficits = data["deficits"]
+    deficit_conditions = [d.get("condition") for d in deficits if d.get("condition")]
+    assert "acute respiratory failure" in deficit_conditions
+
+
+def test_malnutrition_good_note_low_risk(client):
+    """
+    Test malnutrition with complete MEAT -> low/moderate risk.
+    """
+    good_malnutrition_note = {
+        "note_text": """
+        Patient with severe malnutrition. Weight loss 15% over 3 months, current BMI 16.
+        Albumin 2.8, prealbumin 12. Poor caloric intake, only 500 kcal/day.
+        Nutrition consult placed, RD recommendations reviewed.
+        Assessment: Severe protein-calorie malnutrition with muscle wasting.
+        Plan: Start high protein supplements (Ensure), advance to tube feeds if intake inadequate.
+        Follow up with dietitian in 1 week.
+        """,
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Malnutrition", "Cachexia"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=good_malnutrition_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have low to moderate risk
+    assert data["denial_risk"]["score"] <= 60
+
+
+def test_malnutrition_missing_meat_high_risk(client):
+    """
+    Test malnutrition with missing MEAT -> high risk.
+    """
+    bad_malnutrition_note = {
+        "note_text": "Patient has malnutrition. Follow up with nutrition.",
+        "encounter_type": "inpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Malnutrition"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=bad_malnutrition_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have high risk
+    assert data["denial_risk"]["score"] >= 61
+
+    # Verify deficits include malnutrition-specific items
+    deficits = data["deficits"]
+    deficit_conditions = [d.get("condition") for d in deficits if d.get("condition")]
+    assert "malnutrition" in deficit_conditions
+
+
+def test_treatment_cooccurrence_false_positive(client):
+    """
+    Test that generic action words without medication context don't satisfy TREAT.
+    """
+    false_positive_note = {
+        "note_text": "Patient's symptoms increased. Pain worsened. Continue monitoring.",
+        "encounter_type": "outpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Diabetes"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=false_positive_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should have missing TREAT penalty since "increased" without med context
+    deficits = data["deficits"]
+    treat_deficits = [d for d in deficits if d.get("category") == "treat"]
+    assert len(treat_deficits) > 0
+
+
+def test_treatment_cooccurrence_true_positive(client):
+    """
+    Test that medication keywords satisfy TREAT.
+    """
+    true_positive_note = {
+        "note_text": """
+        Patient with diabetes. A1C 8.2%. Blood glucose well controlled on current regimen.
+        Assessment: Diabetes type 2, controlled.
+        Plan: Started metformin 500mg BID. Will titrate up as tolerated.
+        """,
+        "encounter_type": "outpatient",
+        "service_line": "medicine",
+        "diagnoses": ["Diabetes"],
+        "procedures": [],
+        "labs": [],
+        "vitals": [],
+        "problem_list": [],
+        "meds": [],
+        "discharge_disposition": None,
+    }
+
+    headers = create_clinician_headers("test-tenant-001")
+    response = client.post(
+        "/v1/shadow/evidence-deficit", json=true_positive_note, headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should NOT have missing TREAT penalty since metformin is present
+    deficits = data["deficits"]
+    treat_deficits = [
+        d
+        for d in deficits
+        if d.get("category") == "treat" and d.get("condition") == "diabetes"
+    ]
+    assert len(treat_deficits) == 0
