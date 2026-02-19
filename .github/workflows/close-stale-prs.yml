@@ -5,7 +5,7 @@ name: Close Stale Copilot PRs
   schedule:
     # Run weekly on Sundays at midnight UTC
     - cron: '0 0 * * 0'
-  workflow_dispatch: {}  # Allow manual trigger from Actions tab
+  workflow_dispatch:  # Allow manual trigger from Actions tab
 
 jobs:
   close-stale-prs:

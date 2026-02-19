@@ -18,7 +18,7 @@ Usage:
 
 import argparse
 import json
-import os
+import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
@@ -62,8 +62,6 @@ def parse_args():
 
 def get_open_prs(repo: str) -> List[Dict[str, Any]]:
     """Fetch open PRs using GitHub CLI."""
-    import subprocess
-
     try:
         result = subprocess.run(
             [
@@ -116,8 +114,6 @@ def is_stale_pr(pr: Dict[str, Any], days_threshold: int) -> bool:
 
 def close_pr(repo: str, pr_number: int, comment: str) -> bool:
     """Close a PR with a comment."""
-    import subprocess
-
     try:
         # Add comment
         subprocess.run(
