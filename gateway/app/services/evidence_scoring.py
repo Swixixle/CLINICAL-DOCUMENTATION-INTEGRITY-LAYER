@@ -340,6 +340,8 @@ def score_note_defensibility(
         "flags": flags,
         "summary": summary
     }
+
+"""
 Evidence Scoring Engine for Shadow Mode.
 
 This module implements rule-based scoring for clinical documentation quality.
