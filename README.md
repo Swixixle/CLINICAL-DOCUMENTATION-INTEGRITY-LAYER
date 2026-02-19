@@ -394,6 +394,30 @@ docker-compose up -d
 curl http://localhost:8000/healthz
 ```
 
+### Running Without Docker
+
+For development or environments where Docker is not available:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export PYTHONPATH=$(pwd)
+export CDIL_DB_PATH=./data/eli_sentinel.db
+
+# Run directly with uvicorn
+uvicorn gateway.app.main:app --host 0.0.0.0 --port 8000
+```
+
+**See [docs/RUNNING_WITHOUT_DOCKER.md](docs/RUNNING_WITHOUT_DOCKER.md) for complete non-Docker setup instructions including:**
+- Virtual environment setup
+- Environment configuration
+- Development vs. production modes
+- Process management with systemd
+- Performance tuning
+- Troubleshooting
+
 ### Production Deployment
 
 **See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete production deployment instructions including:**
