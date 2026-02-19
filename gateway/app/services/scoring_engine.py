@@ -225,51 +225,57 @@ SEPSIS_KEYWORDS = [
 SEPSIS_MONITOR = [
     "lactate",
     "wbc",
-    "white blood cell",
-    "temperature",
-    "blood pressure",
-    "heart rate",
-    "respiratory rate",
-    "vital signs",
-    "fever",
-    "culture",
     "blood culture",
+    "procalcitonin",
+    "vitals",
+    "vital signs",
+    "map",
+    "mean arterial pressure",
+    "urine output",
+    "fever",
+    "temperature",
 ]
 SEPSIS_EVALUATE = [
-    "source control",
+    "source",
     "infection source",
-    "organ dysfunction",
-    "resolving",
-    "worsening",
-    "improving",
-    "septic",
-    "sirs criteria",
+    "pneumonia",
+    "uti",
+    "urinary tract infection",
+    "cxr",
+    "chest x-ray",
+    "ct",
+    "cultures",
+    "culture",
 ]
 SEPSIS_ASSESS = [
+    "organ dysfunction",
+    "hypotension",
+    "aki",
+    "acute kidney injury",
+    "altered mental status",
+    "sofa",
+    "sofa score",
     "sepsis",
     "septic",
-    "sirs",
-    "organ dysfunction",
-    "qsofa",
-    "sofa score",
 ]
 
 # Sepsis medication tokens
 SEPSIS_MED_TOKENS = [
-    "antibiotic",
-    "antibiotics",
+    "broad-spectrum antibiotics",
+    "broad spectrum antibiotics",
     "vancomycin",
-    "piperacillin",
-    "tazobactam",
     "zosyn",
-    "ceftriaxone",
+    "piperacillin-tazobactam",
+    "piperacillin/tazobactam",
     "cefepime",
-    "meropenem",
-    "levofloxacin",
     "fluids",
+    "30 ml/kg",
+    "fluid resuscitation",
     "crystalloid",
-    "normal saline",
-    "lactated ringer",
+    "vasopressors",
+    "vasopressor",
+    "norepinephrine",
+    "levophed",
 ]
 SEPSIS_ACTION_WORDS = ["start", "continue", "broaden", "narrow", "escalate", "stop"]
 SEPSIS_TREAT = SEPSIS_MED_TOKENS + SEPSIS_ACTION_WORDS
@@ -286,48 +292,52 @@ ARF_KEYWORDS = [
     "hypercapnic respiratory failure",
 ]
 ARF_MONITOR = [
-    "oxygen saturation",
     "spo2",
-    "o2 sat",
+    "sat",
+    "oxygen saturation",
     "abg",
     "arterial blood gas",
-    "pao2",
     "paco2",
+    "pao2",
+    "resp rate",
     "respiratory rate",
-    "work of breathing",
-    "abg",
 ]
 ARF_EVALUATE = [
-    "hypoxia",
-    "hypoxemia",
-    "hypercapnia",
-    "improving",
-    "worsening",
-    "stable",
-    "respiratory distress",
+    "cxr",
+    "chest x-ray",
+    "ct chest",
+    "vbg",
+    "venous blood gas",
+    "pulmonary exam",
+    "work of breathing",
 ]
 ARF_ASSESS = [
-    "respiratory failure",
     "hypoxic",
     "hypercapnic",
-    "type 1",
-    "type 2",
+    "acute",
+    "respiratory distress",
+    "accessory muscles",
+    "respiratory failure",
     "arf",
 ]
 
 # ARF treatment tokens
 ARF_MED_TOKENS = [
+    "o2",
     "oxygen",
-    "supplemental oxygen",
-    "ventilation",
-    "mechanical ventilation",
-    "bipap",
-    "cpap",
-    "high flow",
+    "nc",
     "nasal cannula",
-    "non-rebreather",
+    "hfnc",
+    "high flow nasal cannula",
+    "high flow",
+    "bipap",
+    "niv",
+    "non-invasive ventilation",
     "intubation",
+    "intubated",
     "ventilator",
+    "mechanical ventilation",
+    "wean",
 ]
 ARF_ACTION_WORDS = ["increase", "decrease", "wean", "titrate", "continue"]
 ARF_TREAT = ARF_MED_TOKENS + ARF_ACTION_WORDS
@@ -344,44 +354,48 @@ MALNUTRITION_KEYWORDS = [
     "undernutrition",
 ]
 MALNUTRITION_MONITOR = [
-    "weight",
+    "weight loss",
+    "% weight loss",
+    "percent weight loss",
     "bmi",
     "body mass index",
-    "albumin",
-    "prealbumin",
+    "intake",
+    "calorie count",
     "caloric intake",
     "dietary intake",
 ]
 MALNUTRITION_EVALUATE = [
-    "severity",
-    "mild",
-    "moderate",
-    "severe",
-    "improving",
-    "worsening",
-    "stable",
+    "nutrition consult",
+    "nutritionist",
+    "rd",
+    "registered dietitian",
+    "dietitian",
+    "albumin",
+    "prealbumin",
 ]
 MALNUTRITION_ASSESS = [
+    "severe",
+    "moderate",
+    "cachexia",
+    "muscle wasting",
+    "aspen",
     "malnutrition",
     "malnourished",
-    "nutritional status",
-    "bmi",
-    "albumin",
 ]
 
 # Malnutrition treatment tokens
 MALNUTRITION_MED_TOKENS = [
-    "nutrition",
-    "nutritional support",
-    "dietician",
-    "dietitian",
-    "dietary consult",
-    "tube feeding",
-    "tpn",
-    "parenteral nutrition",
-    "enteral nutrition",
     "supplements",
     "nutritional supplements",
+    "enteral",
+    "enteral nutrition",
+    "tube feeds",
+    "tube feeding",
+    "tpn",
+    "total parenteral nutrition",
+    "parenteral nutrition",
+    "high protein",
+    "diet order",
     "ensure",
     "boost",
 ]
@@ -1061,11 +1075,11 @@ class DenialShieldScorer:
 
         # Monitor
         if not contains_any_keyword(note_text, SEPSIS_MONITOR):
-            risk_score += 30
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_SEPSIS_MONITOR_MISSING,
-                    impact=30,
+                    impact=25,
                     reason="Sepsis documented but no monitoring data (lactate, vitals, cultures)",
                 )
             )
@@ -1075,22 +1089,22 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Monitor",
                     category="monitor",
                     why_payer_denies="Sepsis diagnosis without vital signs and lab monitoring fails MEAT criteria",
-                    what_to_add="Document lactate trend, vital signs, fever curve, and culture results.",
+                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                     evidence_refs=[],
                     confidence=0.95,
                     condition="sepsis",
                     missing=["lactate", "vital signs", "cultures"],
-                    fix="Document lactate trend, vital signs, fever curve, and culture results.",
+                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                 )
             )
 
         # Evaluate
         if not contains_any_keyword(note_text, SEPSIS_EVALUATE):
-            risk_score += 20
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_SEPSIS_EVAL_MISSING,
-                    impact=20,
+                    impact=15,
                     reason="Sepsis documented but no evaluation of infection source or organ dysfunction",
                 )
             )
@@ -1100,7 +1114,7 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of sepsis source or trajectory undermines medical necessity",
-                    what_to_add="Document suspected infection source, organ dysfunction, and clinical trajectory.",
+                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                     evidence_refs=[],
                     confidence=0.90,
                     condition="sepsis",
@@ -1109,17 +1123,17 @@ class DenialShieldScorer:
                         "organ dysfunction",
                         "clinical trajectory",
                     ],
-                    fix="Document suspected infection source, organ dysfunction, and clinical trajectory.",
+                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                 )
             )
 
         # Assess
         if not contains_any_keyword(note_text, SEPSIS_ASSESS):
-            risk_score += 20
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_SEPSIS_ASSESS_MISSING,
-                    impact=20,
+                    impact=15,
                     reason="Sepsis documented but no assessment with SIRS or SOFA criteria",
                 )
             )
@@ -1128,13 +1142,13 @@ class DenialShieldScorer:
                     id="DEF-SEPSIS-A",
                     title="Sepsis: Missing Assess",
                     category="assess",
-                    why_payer_denies="Assessment must specify sepsis criteria (SIRS/qSOFA) and organ dysfunction",
-                    what_to_add="Add 'Sepsis with organ dysfunction' or SIRS/qSOFA criteria to assessment.",
+                    why_payer_denies="Assessment must specify sepsis criteria and organ dysfunction",
+                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                     evidence_refs=[],
                     confidence=0.88,
                     condition="sepsis",
-                    missing=["SIRS criteria", "organ dysfunction", "sepsis criteria"],
-                    fix="Add 'Sepsis with organ dysfunction' or SIRS/qSOFA criteria to assessment.",
+                    missing=["SOFA criteria", "organ dysfunction", "sepsis criteria"],
+                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                 )
             )
 
@@ -1142,11 +1156,11 @@ class DenialShieldScorer:
         if not contains_treatment_with_cooccurrence(
             note_text, SEPSIS_MED_TOKENS, SEPSIS_ACTION_WORDS
         ):
-            risk_score += 30
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_SEPSIS_TREAT_MISSING,
-                    impact=30,
+                    impact=25,
                     reason="Sepsis documented but no treatment plan (antibiotics, fluids)",
                 )
             )
@@ -1156,12 +1170,12 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Treat",
                     category="treat",
                     why_payer_denies="Sepsis without documented antibiotics and fluid resuscitation fails to justify medical necessity",
-                    what_to_add="Document suspected source + organ dysfunction + lactate trend + fluids/antibiotics timing.",
+                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                     evidence_refs=[],
                     confidence=0.96,
                     condition="sepsis",
                     missing=["antibiotics", "fluid resuscitation", "source control"],
-                    fix="Document suspected source + organ dysfunction + lactate trend + fluids/antibiotics timing.",
+                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
                 )
             )
 
@@ -1178,11 +1192,11 @@ class DenialShieldScorer:
 
         # Monitor
         if not contains_any_keyword(note_text, ARF_MONITOR):
-            risk_score += 28
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_ARF_MONITOR_MISSING,
-                    impact=28,
+                    impact=25,
                     reason="Respiratory failure documented but no monitoring data (SpO2, ABG, RR)",
                 )
             )
@@ -1192,22 +1206,22 @@ class DenialShieldScorer:
                     title="ARF: Missing Monitor",
                     category="monitor",
                     why_payer_denies="ARF diagnosis without oxygenation monitoring fails MEAT criteria",
-                    what_to_add="Document SpO2 values, ABG results, respiratory rate, and work of breathing.",
+                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                     evidence_refs=[],
                     confidence=0.93,
                     condition="acute respiratory failure",
                     missing=["SpO2", "ABG", "respiratory rate"],
-                    fix="Document SpO2 values, ABG results, respiratory rate, and work of breathing.",
+                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                 )
             )
 
         # Evaluate
         if not contains_any_keyword(note_text, ARF_EVALUATE):
-            risk_score += 18
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_ARF_EVAL_MISSING,
-                    impact=18,
+                    impact=15,
                     reason="Respiratory failure documented but no evaluation of hypoxia/hypercapnia status",
                 )
             )
@@ -1217,22 +1231,22 @@ class DenialShieldScorer:
                     title="ARF: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of respiratory status undermines medical necessity",
-                    what_to_add="Document if hypoxic vs hypercapnic, improving vs worsening respiratory status.",
+                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                     evidence_refs=[],
                     confidence=0.87,
                     condition="acute respiratory failure",
                     missing=["hypoxia assessment", "clinical trajectory"],
-                    fix="Document if hypoxic vs hypercapnic, improving vs worsening respiratory status.",
+                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                 )
             )
 
         # Assess
         if not contains_any_keyword(note_text, ARF_ASSESS):
-            risk_score += 18
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_ARF_ASSESS_MISSING,
-                    impact=18,
+                    impact=15,
                     reason="Respiratory failure documented but no assessment with type/severity",
                 )
             )
@@ -1242,12 +1256,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Assess",
                     category="assess",
                     why_payer_denies="Assessment must specify ARF type (hypoxic/hypercapnic) and severity",
-                    what_to_add="Add 'Acute hypoxic respiratory failure' or 'Type 1 respiratory failure' to assessment.",
+                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                     evidence_refs=[],
                     confidence=0.85,
                     condition="acute respiratory failure",
                     missing=["ARF type", "severity"],
-                    fix="Add 'Acute hypoxic respiratory failure' or 'Type 1 respiratory failure' to assessment.",
+                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                 )
             )
 
@@ -1255,11 +1269,11 @@ class DenialShieldScorer:
         if not contains_treatment_with_cooccurrence(
             note_text, ARF_MED_TOKENS, ARF_ACTION_WORDS
         ):
-            risk_score += 28
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_ARF_TREAT_MISSING,
-                    impact=28,
+                    impact=25,
                     reason="Respiratory failure documented but no treatment plan (oxygen, ventilation)",
                 )
             )
@@ -1269,12 +1283,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Treat",
                     category="treat",
                     why_payer_denies="ARF without documented oxygen/ventilation support fails to justify medical necessity",
-                    what_to_add="Document oxygen delivery method (nasal cannula, high flow, BiPAP, ventilator) with settings.",
+                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                     evidence_refs=[],
                     confidence=0.94,
                     condition="acute respiratory failure",
                     missing=["oxygen therapy", "ventilation support"],
-                    fix="Document oxygen delivery method (nasal cannula, high flow, BiPAP, ventilator) with settings.",
+                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
                 )
             )
 
@@ -1291,11 +1305,11 @@ class DenialShieldScorer:
 
         # Monitor
         if not contains_any_keyword(note_text, MALNUTRITION_MONITOR):
-            risk_score += 26
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_MALNUTRITION_MONITOR_MISSING,
-                    impact=26,
+                    impact=25,
                     reason="Malnutrition documented but no monitoring data (weight, BMI, albumin)",
                 )
             )
@@ -1305,22 +1319,22 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Monitor",
                     category="monitor",
                     why_payer_denies="Malnutrition diagnosis without nutritional markers fails MEAT criteria",
-                    what_to_add="Document weight trend, BMI, albumin/prealbumin levels, and dietary intake.",
+                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                     evidence_refs=[],
                     confidence=0.92,
                     condition="malnutrition",
                     missing=["weight", "BMI", "albumin", "dietary intake"],
-                    fix="Document weight trend, BMI, albumin/prealbumin levels, and dietary intake.",
+                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                 )
             )
 
         # Evaluate
         if not contains_any_keyword(note_text, MALNUTRITION_EVALUATE):
-            risk_score += 16
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_MALNUTRITION_EVAL_MISSING,
-                    impact=16,
+                    impact=15,
                     reason="Malnutrition documented but no evaluation of severity or trajectory",
                 )
             )
@@ -1330,22 +1344,22 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of malnutrition severity undermines medical necessity",
-                    what_to_add="Document if mild, moderate, or severe malnutrition and clinical trajectory.",
+                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                     evidence_refs=[],
                     confidence=0.86,
                     condition="malnutrition",
                     missing=["severity", "clinical trajectory"],
-                    fix="Document if mild, moderate, or severe malnutrition and clinical trajectory.",
+                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                 )
             )
 
         # Assess
         if not contains_any_keyword(note_text, MALNUTRITION_ASSESS):
-            risk_score += 16
+            risk_score += 15
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_MALNUTRITION_ASSESS_MISSING,
-                    impact=16,
+                    impact=15,
                     reason="Malnutrition documented but no assessment with criteria",
                 )
             )
@@ -1355,12 +1369,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Assess",
                     category="assess",
                     why_payer_denies="Assessment must specify malnutrition criteria (BMI, albumin, weight loss)",
-                    what_to_add="Add 'Moderate malnutrition with BMI 16 and albumin 2.8' to assessment.",
+                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                     evidence_refs=[],
                     confidence=0.84,
                     condition="malnutrition",
                     missing=["malnutrition criteria", "severity grade"],
-                    fix="Add 'Moderate malnutrition with BMI 16 and albumin 2.8' to assessment.",
+                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                 )
             )
 
@@ -1368,11 +1382,11 @@ class DenialShieldScorer:
         if not contains_treatment_with_cooccurrence(
             note_text, MALNUTRITION_MED_TOKENS, MALNUTRITION_ACTION_WORDS
         ):
-            risk_score += 26
+            risk_score += 25
             explanations.append(
                 ScoreExplanation(
                     rule_id=RULE_MALNUTRITION_TREAT_MISSING,
-                    impact=26,
+                    impact=25,
                     reason="Malnutrition documented but no treatment plan (nutrition support, dietitian)",
                 )
             )
@@ -1382,12 +1396,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Treat",
                     category="treat",
                     why_payer_denies="Malnutrition without documented nutritional intervention fails to justify medical necessity",
-                    what_to_add="Document nutritional support plan (dietitian consult, supplements, tube feeding, TPN).",
+                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                     evidence_refs=[],
                     confidence=0.93,
                     condition="malnutrition",
                     missing=["nutritional support", "dietitian consult"],
-                    fix="Document nutritional support plan (dietitian consult, supplements, tube feeding, TPN).",
+                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
                 )
             )
 
