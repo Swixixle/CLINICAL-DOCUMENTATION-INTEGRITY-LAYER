@@ -12,8 +12,7 @@ Design Principles:
 """
 
 import json
-import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides concrete, actionable guidance for deploying CDIL (Clinical Documentation Integrity Layer) in a production environment with courtroom-grade security.
+This document provides concrete, actionable guidance for deploying CDIL (Clinical Documentation Integrity Layer) in a production environment with tamper-evident security.
 
 **Audience**: DevOps, Security Engineers, Compliance Officers
 

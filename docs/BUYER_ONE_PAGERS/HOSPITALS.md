@@ -16,7 +16,7 @@
 
 ## The Solution: Verifiable Evidence Layer
 
-CDIL provides **exportable, courtroom-ready evidence** for every AI-generated note.
+CDIL provides **exportable, audit-ready evidence** for every AI-generated note.
 
 ### What You Get
 
