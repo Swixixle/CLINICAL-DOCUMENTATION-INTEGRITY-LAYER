@@ -75,67 +75,6 @@ def get_certificate_from_db(certificate_id: str, tenant_id: str) -> Optional[Dic
 
 
 @router.post("/simulate-alteration", response_model=SimulateAlterationResponse)
-Defense Simulation API Routes.
-
-Provides proof-of-concept endpoints to demonstrate certificate integrity verification.
-Shows what happens when documentation is altered vs. original.
-"""
-
-import json
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, Field
-from typing import Dict, Any
-
-from gateway.app.security.auth import Identity, get_current_identity
-from gateway.app.db.migrate import get_connection
-from gateway.app.services.hashing import sha256_hex
-
-
-router = APIRouter(prefix="/v1/defense", tags=["defense"])
-
-
-class SimulateAlterationRequest(BaseModel):
-    """Request model for alteration simulation."""
-    certificate_id: str = Field(..., description="Certificate ID to test")
-    mutated_note_text: str = Field(..., description="Altered version of note text")
-
-
-class SimulateAlterationResponse(BaseModel):
-    """Response model for alteration simulation."""
-    certificate_id: str = Field(..., description="Certificate ID tested")
-    original_verification: Dict[str, Any] = Field(..., description="Verification of original certificate")
-    mutated_verification: Dict[str, Any] = Field(..., description="Verification with mutated note")
-    demonstration: Dict[str, Any] = Field(..., description="What broke and why")
-
-
-@router.post(
-    "/simulate-alteration",
-    response_model=SimulateAlterationResponse,
-    summary="Simulate documentation alteration (Proof Demo)",
-    description="""
-    Defense Proof Demonstration (Sales Weapon).
-    
-    Demonstrates the power of cryptographic integrity by showing:
-    - PASS: Original certificate verifies successfully
-    - FAIL: Altered documentation fails verification with clear explanation
-    
-    **Use Cases:**
-    - Executive demonstrations
-    - Board presentations
-    - Audit proof-of-concept
-    - Litigation defense preparation
-    
-    **What This Shows:**
-    1. Original certificate: PASS (all integrity checks succeed)
-    2. Mutated note: FAIL (hash mismatch detected)
-    3. Clear explanation: What broke and why
-    4. Recommended action: What to do next
-    
-    **Authentication:**
-    - Requires valid JWT with tenant_id claim
-    - Only works with certificates belonging to authenticated tenant
-    """
-)
 async def simulate_alteration(
     request: SimulateAlterationRequest,
     identity: Identity = Depends(get_current_identity)

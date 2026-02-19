@@ -14,41 +14,17 @@ Security Model:
 """
 
 import os
+import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime, timezone
-
-from gateway.app.security.auth import Identity, get_current_identity
-from gateway.app.services.evidence_scoring import score_note_defensibility
-from gateway.app.services.revenue_model import estimate_revenue_risk, calculate_annual_projection
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-"""
-Shadow Mode routes for Evidence Deficit Intelligence.
-
-# Shadow Mode routes for Evidence Deficit Intelligence.
-#
-# Shadow Mode is a read-only analysis feature that:
-# - Analyzes clinical notes + structured context
-# - Identifies documentation deficits and denial risks
-# - Provides actionable recommendations
-# - Does NOT write back to EHR or store PHI
-#
-# Security:
-# - JWT authentication required (tenant_id from JWT, never from request)
-# - Rate limiting to prevent abuse
-# - No PHI storage (only hashes and aggregates)
-
-import os
-import json
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Any
-
-from gateway.app.models.shadow import ShadowRequest, ShadowResult
 from gateway.app.security.auth import Identity, get_current_identity
+from gateway.app.services.revenue_model import estimate_revenue_risk, calculate_annual_projection
+from gateway.app.models.shadow import ShadowRequest, ShadowResult
 from gateway.app.services.hashing import sha256_hex
 from gateway.app.services.scoring_engine import DenialShieldScorer
 from gateway.app.services.shadow_dashboard import build_dashboard_payload
