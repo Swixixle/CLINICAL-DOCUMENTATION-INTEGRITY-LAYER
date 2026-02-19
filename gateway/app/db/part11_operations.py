@@ -10,40 +10,19 @@ import hashlib
 import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pathlib import Path
-
-from gateway.app.db.migrate import get_connection
-from gateway.app.models.part11 import (
-    Tenant,
-    Encounter,
-    Note,
-    Actor,
-    NoteVersion,
-    AIGeneration,
-    HumanReviewSession,
-    Attestation,
-    Signature,
-    AuditEvent,
-    LedgerAnchor,
-    ClinicalFact,
-    NoteFactLink,
-    SimilarityScore,
-    DefenseBundle,
-    BundleItem,
-    AuditObjectType,
-    AuditAction,
-)
 
 
 def get_utc_timestamp() -> str:
     """Get current UTC timestamp in ISO 8601 format."""
     from datetime import timezone
+
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def generate_ulid() -> str:
     """Generate a ULID-like identifier (simplified version)."""
     import uuid
+
     # For MVP, use UUID v7 style (time-ordered UUID)
     # In production, use proper ULID library
     return str(uuid.uuid4())
@@ -90,9 +69,7 @@ def create_tenant(
 
 def get_tenant(conn: sqlite3.Connection, tenant_id: str) -> Optional[Dict[str, Any]]:
     """Get tenant by ID."""
-    cursor = conn.execute(
-        "SELECT * FROM tenants WHERE tenant_id = ?", (tenant_id,)
-    )
+    cursor = conn.execute("SELECT * FROM tenants WHERE tenant_id = ?", (tenant_id,))
     row = cursor.fetchone()
     return dict(row) if row else None
 
@@ -179,7 +156,10 @@ def create_note(
 
 
 def update_note_status(
-    conn: sqlite3.Connection, note_id: str, status: str, current_version_id: Optional[str] = None
+    conn: sqlite3.Connection,
+    note_id: str,
+    status: str,
+    current_version_id: Optional[str] = None,
 ):
     """Update note status and current version."""
     timestamp = get_utc_timestamp()
@@ -227,9 +207,7 @@ def create_actor(
     """Create a new actor."""
     actor_id = generate_ulid()
     timestamp = get_utc_timestamp()
-    actor_identifier_hash = (
-        hash_content(actor_identifier) if actor_identifier else None
-    )
+    actor_identifier_hash = hash_content(actor_identifier) if actor_identifier else None
 
     conn.execute(
         """
@@ -297,9 +275,7 @@ def create_note_version(
     return version_id
 
 
-def get_note_versions(
-    conn: sqlite3.Connection, note_id: str
-) -> List[Dict[str, Any]]:
+def get_note_versions(conn: sqlite3.Connection, note_id: str) -> List[Dict[str, Any]]:
     """Get all versions for a note."""
     cursor = conn.execute(
         "SELECT * FROM note_versions WHERE note_id = ? ORDER BY created_at_utc",
@@ -587,9 +563,7 @@ def get_audit_events(
     return [dict(row) for row in cursor.fetchall()]
 
 
-def verify_audit_chain(
-    conn: sqlite3.Connection, tenant_id: str
-) -> Dict[str, Any]:
+def verify_audit_chain(conn: sqlite3.Connection, tenant_id: str) -> Dict[str, Any]:
     """Verify audit event hash chain integrity."""
     cursor = conn.execute(
         """
@@ -608,10 +582,21 @@ def verify_audit_chain(
 
     errors = []
     for i, event in enumerate(events):
-        event_id, timestamp, obj_type, obj_id, action, payload_json, prev_hash, event_hash = event
+        (
+            event_id,
+            timestamp,
+            obj_type,
+            obj_id,
+            action,
+            payload_json,
+            prev_hash,
+            event_hash,
+        ) = event
 
         # Recompute hash
-        hash_input = f"{prev_hash or ''}{timestamp}{obj_type}{obj_id}{action}{payload_json}"
+        hash_input = (
+            f"{prev_hash or ''}{timestamp}{obj_type}{obj_id}{action}{payload_json}"
+        )
         computed_hash = hash_content(hash_input)
 
         if computed_hash != event_hash:
@@ -712,9 +697,7 @@ def add_bundle_item(
     return bundle_item_id
 
 
-def get_bundle_items(
-    conn: sqlite3.Connection, bundle_id: str
-) -> List[Dict[str, Any]]:
+def get_bundle_items(conn: sqlite3.Connection, bundle_id: str) -> List[Dict[str, Any]]:
     """Get all items in a defense bundle."""
     cursor = conn.execute(
         "SELECT * FROM bundle_items WHERE bundle_id = ?", (bundle_id,)

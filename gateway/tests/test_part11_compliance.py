@@ -10,7 +10,6 @@ import sqlite3
 import tempfile
 import os
 from pathlib import Path
-from datetime import datetime
 
 from gateway.app.db.part11_operations import (
     create_tenant,
@@ -35,7 +34,6 @@ from gateway.app.db.part11_operations import (
     add_bundle_item,
     get_bundle_items,
     hash_content,
-    hash_with_salt,
 )
 
 
@@ -51,15 +49,15 @@ def test_db():
 
     # Load schemas
     schema_dir = Path(__file__).parent.parent / "app" / "db"
-    
+
     # Load base schema
     with open(schema_dir / "schema.sql", "r") as f:
         conn.executescript(f.read())
-    
+
     # Load Part 11 schema
     with open(schema_dir / "part11_schema.sql", "r") as f:
         conn.executescript(f.read())
-    
+
     conn.commit()
 
     yield conn
@@ -108,7 +106,7 @@ def test_create_encounter_with_hashed_patient_ref(test_db):
     assert encounter is not None
     assert encounter["tenant_id"] == tenant_id
     assert encounter["source_system"] == "Epic"
-    
+
     # Verify patient ID is hashed, not stored in plaintext
     assert encounter["patient_ref_hash"] != "patient-12345"
     assert len(encounter["patient_ref_hash"]) == 64  # SHA-256 hex length
@@ -242,6 +240,7 @@ def test_human_review_session_tracking(test_db):
 
     # Simulate review duration by ending session
     import time
+
     time.sleep(0.1)  # 100ms delay
 
     end_review_session(
@@ -359,7 +358,7 @@ def test_audit_event_hash_chaining(test_db):
     # Verify second event links to first
     event2 = next(e for e in events if e["event_id"] == event2_id)
     event1 = next(e for e in events if e["event_id"] == event1_id)
-    
+
     assert event1["prev_event_hash"] is None  # First event has no previous
     assert event2["prev_event_hash"] == event1["event_hash"]  # Second links to first
 
@@ -404,7 +403,7 @@ def test_audit_chain_tampering_detection(test_db):
         actor_id=actor_id,
     )
 
-    event2_id = create_audit_event(
+    event2_id = create_audit_event(  # noqa: F841
         test_db,
         tenant_id=tenant_id,
         object_type="note",
@@ -452,7 +451,7 @@ def test_defense_bundle_creation(test_db):
     assert bundle_id is not None
 
     # Add items to bundle
-    item1_id = add_bundle_item(
+    item1_id = add_bundle_item(  # noqa: F841
         test_db,
         bundle_id=bundle_id,
         item_type="note_json",
@@ -460,7 +459,7 @@ def test_defense_bundle_creation(test_db):
         item_content='{"note_id": "note-1", "content": "..."}',
     )
 
-    item2_id = add_bundle_item(
+    item2_id = add_bundle_item(  # noqa: F841
         test_db,
         bundle_id=bundle_id,
         item_type="audit_log",
@@ -590,7 +589,7 @@ def test_no_phi_in_audit_events(test_db):
     )
     row = cursor.fetchone()
     payload = row["event_payload_json"]
-    
+
     # Payload should not contain patient names, note text, etc.
     assert "patient" not in payload.lower() or "patient_hash" in payload
     assert "content" not in payload or "content_hash" in payload

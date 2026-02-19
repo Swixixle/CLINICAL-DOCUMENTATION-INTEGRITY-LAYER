@@ -82,7 +82,7 @@ def ensure_schema():
     # Read schemas
     with open(schema_path, "r") as f:
         schema_sql = f.read()
-    
+
     # Read Part 11 schema if it exists
     part11_sql = ""
     if part11_schema_path.exists():
@@ -97,11 +97,11 @@ def ensure_schema():
 
         # Execute base schema
         conn.executescript(schema_sql)
-        
+
         # Execute Part 11 schema
         if part11_sql:
             conn.executescript(part11_sql)
-        
+
         conn.commit()
     finally:
         conn.close()

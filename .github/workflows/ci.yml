@@ -47,6 +47,59 @@ jobs:
         ENV: TEST
         DISABLE_RATE_LIMITS: "1"
 
+  postgres-verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: cdil
+          POSTGRES_USER: cdil
+          POSTGRES_PASSWORD: cdil
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Apply Postgres schema
+      run: |
+        psql "$PG_URL" -f deploy/production-db-setup.sql
+      env:
+        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
+
+    - name: Verify schema objects exist
+      run: |
+        psql "$PG_URL" -c "\d audit_events" | grep -q event_hash
+        echo "Schema verification: audit_events table with event_hash column confirmed."
+      env:
+        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
+
+    - name: Run ledger integrity check against Postgres (empty ledger — PASS expected)
+      run: |
+        chmod +x ./tools/verify-ledger-integrity.sh
+        ./tools/verify-ledger-integrity.sh --engine postgres --pg-url "$PGURL" --json
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+
   smoke-test-local:
     runs-on: ubuntu-latest
     permissions:
