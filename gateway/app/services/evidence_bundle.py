@@ -20,17 +20,16 @@ from datetime import datetime, timezone
 
 
 def build_evidence_bundle(
-    certificate: Dict[str, Any],
-    identity: Optional[str] = None
+    certificate: Dict[str, Any], identity: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Build a structured evidence bundle (JSON) per INTEGRITY_ARTIFACT_SPEC.
-    
+
     This is the primary evidence artifact for hospitals to export for:
     - Appeals and litigation
     - Compliance audits
     - Regulatory submissions
-    
+
     The bundle includes:
     - Certificate metadata
     - Canonical message (what was signed)
@@ -39,11 +38,11 @@ def build_evidence_bundle(
     - Human attestation details
     - Verification instructions
     - Public key reference
-    
+
     Args:
         certificate: Complete certificate dictionary
         identity: Optional tenant_id for authorization check
-        
+
     Returns:
         Structured evidence bundle dictionary
     """
@@ -53,81 +52,90 @@ def build_evidence_bundle(
         "tenant_id": certificate.get("tenant_id"),
         "issued_at": certificate.get("timestamp"),
         "key_id": certificate.get("signature", {}).get("key_id"),
-        "algorithm": certificate.get("signature", {}).get("algorithm")
+        "algorithm": certificate.get("signature", {}).get("algorithm"),
     }
-    
+
     # Extract hashes
     hashes = {
         "note_hash": certificate.get("note_hash"),
         "hash_algorithm": "SHA-256",
         "patient_hash": certificate.get("patient_hash"),
-        "reviewer_hash": certificate.get("reviewer_hash")
+        "reviewer_hash": certificate.get("reviewer_hash"),
     }
-    
+
     # Build model info (basic for now, Phase 2 will enhance this)
     model_info = {
         "model_version": certificate.get("model_version"),
         "prompt_version": certificate.get("prompt_version"),
         "governance_policy_version": certificate.get("governance_policy_version"),
-        "policy_hash": certificate.get("policy_hash")
+        "policy_hash": certificate.get("policy_hash"),
     }
-    
+
     # Add model_id if present (Phase 2 enhancement)
     if certificate.get("model_id"):
         model_info["model_id"] = certificate.get("model_id")
-    
+
     # Build human attestation
     human_attestation = {
         "reviewed": certificate.get("human_reviewed", False),
         "reviewer_hash": certificate.get("reviewer_hash"),
-        "review_timestamp": certificate.get("finalized_at")  # Finalization is when review occurred
+        "review_timestamp": certificate.get(
+            "finalized_at"
+        ),  # Finalization is when review occurred
     }
-    
+
     # Attribution (Phase 2 - optional for now)
     attribution = certificate.get("attribution")
-    
+
     # Verification instructions
     cert_id = certificate.get("certificate_id")
     verification_instructions = {
-        "offline_cli": f"python verify_certificate_cli.py certificate.json",
+        "offline_cli": "python verify_certificate_cli.py certificate.json",
         "api_endpoint": f"POST /v1/certificates/{cert_id}/verify",
-        "manual_verification": "Recompute chain_hash and verify signature with public key"
+        "manual_verification": "Recompute chain_hash and verify signature with public key",
     }
-    
+
     # Public key reference (prefer reference over embed)
     key_id = certificate.get("signature", {}).get("key_id")
-    public_key_reference = {
-        "key_id": key_id,
-        "reference_url": f"GET /v1/keys/{key_id}"
-    }
-    
+    public_key_reference = {"key_id": key_id, "reference_url": f"GET /v1/keys/{key_id}"}
+
     # Litigation metadata (Courtroom Defense Mode)
     # This section provides all fields needed for legal proceedings
     canonical_message = certificate.get("signature", {}).get("canonical_message", {})
-    
+
     litigation_metadata = {
         "verification_status": "VALID",  # Assume valid unless caller specifies otherwise
-        "verification_timestamp_utc": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "verification_timestamp_utc": datetime.now(timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
         "signer_public_key_id": key_id,
-        "signature_algorithm": certificate.get("signature", {}).get("algorithm", "ECDSA_SHA_256"),
-        "canonical_hash": certificate.get("signature", {}).get("canonical_message", {}).get("note_hash"),
+        "signature_algorithm": certificate.get("signature", {}).get(
+            "algorithm", "ECDSA_SHA_256"
+        ),
+        "canonical_hash": certificate.get("signature", {})
+        .get("canonical_message", {})
+        .get("note_hash"),
         "human_attestation_summary": (
             f"{'Human reviewed and attested' if certificate.get('human_reviewed') else 'Not reviewed by human'}"
             f"{' at ' + certificate.get('human_attested_at_utc') if certificate.get('human_attested_at_utc') else ''}"
         ),
-        "provenance_fields_signed": list(canonical_message.keys()) if canonical_message else [],
+        "provenance_fields_signed": (
+            list(canonical_message.keys()) if canonical_message else []
+        ),
         "chain_integrity": {
             "chain_hash": certificate.get("integrity_chain", {}).get("chain_hash"),
-            "previous_hash": certificate.get("integrity_chain", {}).get("previous_hash"),
+            "previous_hash": certificate.get("integrity_chain", {}).get(
+                "previous_hash"
+            ),
             "prevents_insertion": True,
-            "prevents_reordering": True
-        }
+            "prevents_reordering": True,
+        },
     }
-    
+
     # Build complete bundle
     bundle = {
         "bundle_version": "2.0",  # Bumped for Courtroom Defense Mode
-        "generated_at": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "certificate": certificate,
         "metadata": metadata,
         "hashes": hashes,
@@ -135,58 +143,61 @@ def build_evidence_bundle(
         "human_attestation": human_attestation,
         "litigation_metadata": litigation_metadata,  # NEW: Courtroom Defense Mode
         "verification_instructions": verification_instructions,
-        "public_key_reference": public_key_reference
+        "public_key_reference": public_key_reference,
     }
-    
+
     # Add attribution if present (Phase 2)
     if attribution:
         bundle["attribution"] = attribution
-    
+
     return bundle
 
 
 def generate_evidence_bundle(
     certificate: Dict[str, Any],
     certificate_pdf: bytes,
-    verification_report: Dict[str, Any]
+    verification_report: Dict[str, Any],
 ) -> bytes:
     """
     Generate a complete evidence bundle as a ZIP file.
-    
+
     This is the secondary format (ZIP) for convenience.
     The primary format is JSON via build_evidence_bundle().
-    
+
     Args:
         certificate: Certificate dictionary
         certificate_pdf: PDF bytes
         verification_report: Verification result dictionary
-        
+
     Returns:
         ZIP file bytes
     """
     buffer = BytesIO()
-    
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
         # Add certificate.json
         cert_json = json.dumps(certificate, indent=2, sort_keys=True)
-        zipf.writestr('certificate.json', cert_json)
-        
+        zipf.writestr("certificate.json", cert_json)
+
         # Add certificate.pdf
-        zipf.writestr('certificate.pdf', certificate_pdf)
-        
+        zipf.writestr("certificate.pdf", certificate_pdf)
+
         # Add evidence_bundle.json (structured bundle)
         evidence_bundle_json = build_evidence_bundle(certificate)
-        zipf.writestr('evidence_bundle.json', json.dumps(evidence_bundle_json, indent=2))
-        
+        zipf.writestr(
+            "evidence_bundle.json", json.dumps(evidence_bundle_json, indent=2)
+        )
+
         # Add verification_report.json
         verify_json = json.dumps(verification_report, indent=2)
-        zipf.writestr('verification_report.json', verify_json)
-        
+        zipf.writestr("verification_report.json", verify_json)
+
         # Add public_key.pem (for offline verification with OpenSSL)
         key_id = certificate.get("signature", {}).get("key_id")
         if key_id:
             try:
                 from gateway.app.services.storage import get_tenant_key_by_key_id
+
                 tenant_key = get_tenant_key_by_key_id(key_id)
                 if tenant_key and tenant_key.get("public_jwk_json"):
                     # Convert JWK to PEM format
@@ -194,71 +205,74 @@ def generate_evidence_bundle(
                     from cryptography.hazmat.primitives import serialization
                     from cryptography.hazmat.primitives.asymmetric import rsa
                     from cryptography.hazmat.backends import default_backend
-                    
+
                     jwk = json_lib.loads(tenant_key["public_jwk_json"])
-                    
+
                     # Extract RSA public key components from JWK
                     if jwk.get("kty") == "RSA" and jwk.get("n") and jwk.get("e"):
                         import base64
-                        
+
                         # Decode base64url encoded values with proper padding
                         def decode_base64url(data):
                             """Decode base64url with automatic padding."""
                             # Add padding if needed
                             padding = 4 - (len(data) % 4)
                             if padding != 4:
-                                data += '=' * padding
+                                data += "=" * padding
                             return base64.urlsafe_b64decode(data)
-                        
+
                         # Decode components
                         n_bytes = decode_base64url(jwk["n"])
                         e_bytes = decode_base64url(jwk["e"])
-                        
+
                         # Convert to integers
-                        n = int.from_bytes(n_bytes, byteorder='big')
-                        e = int.from_bytes(e_bytes, byteorder='big')
-                        
+                        n = int.from_bytes(n_bytes, byteorder="big")
+                        e = int.from_bytes(e_bytes, byteorder="big")
+
                         # Create RSA public key
                         public_numbers = rsa.RSAPublicNumbers(e, n)
                         public_key = public_numbers.public_key(default_backend())
-                        
+
                         # Serialize to PEM
                         pem_bytes = public_key.public_key_bytes(
                             encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
                         )
-                        
-                        zipf.writestr('public_key.pem', pem_bytes.decode('utf-8'))
+
+                        zipf.writestr("public_key.pem", pem_bytes.decode("utf-8"))
             except Exception as e:
                 # If public key extraction fails, add a note
-                zipf.writestr('public_key.pem', f"# Public key extraction failed: {str(e)}\n# Retrieve from /v1/keys/{key_id}")
-        
+                zipf.writestr(
+                    "public_key.pem",
+                    f"# Public key extraction failed: {str(e)}\n# Retrieve from /v1/keys/{key_id}",
+                )
+
         # Add README.txt (offline verification instructions)
         readme_content = generate_verification_readme(
-            certificate.get('certificate_id', 'unknown'),
-            verification_report.get('valid', False)
+            certificate.get("certificate_id", "unknown"),
+            verification_report.get("valid", False),
         )
-        zipf.writestr('README.txt', readme_content)
-    
+        zipf.writestr("README.txt", readme_content)
+
     zip_bytes = buffer.getvalue()
     buffer.close()
-    
+
     return zip_bytes
 
 
 def generate_verification_readme(certificate_id: str, is_valid: bool) -> str:
     """
     Generate README content with verification instructions.
-    
+
     Args:
         certificate_id: Certificate ID
         is_valid: Current verification status
-        
+
     Returns:
         README text content
     """
     status_text = "VERIFIED - PASSED" if is_valid else "INVALID - FAILED"
-    
+
     readme = f"""
 =================================================================
 CLINICAL DOCUMENTATION INTEGRITY CERTIFICATE
@@ -471,80 +485,86 @@ For technical support:
 
 =================================================================
 """
-    
+
     return readme.strip()
 
 
 def generate_defense_bundle(
     certificate: Dict[str, Any],
     public_key_pem: str,
-    verification_report: Dict[str, Any]
+    verification_report: Dict[str, Any],
 ) -> bytes:
     """
     Generate a courtroom defense bundle as a ZIP file.
-    
+
     This is the litigation-ready format with all artifacts needed for:
     - Legal proceedings
     - Expert witness testimony
     - Offline verification
     - Courtroom presentation
-    
+
     Contents:
     - certificate.json: Complete certificate with all provenance fields
     - canonical_message.json: Exact message that was signed (for hash recomputation)
     - verification_report.json: Current verification status
     - public_key.pem: Public key for signature verification
     - README.txt: Step-by-step offline verification instructions
-    
+
     Args:
         certificate: Complete certificate dictionary
         public_key_pem: Public key in PEM format
         verification_report: Current verification status
-        
+
     Returns:
         ZIP file bytes
     """
     buffer = BytesIO()
-    
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
         # 1. Add certificate.json (complete certificate)
         cert_json = json.dumps(certificate, indent=2, sort_keys=True)
-        zipf.writestr('certificate.json', cert_json)
-        
+        zipf.writestr("certificate.json", cert_json)
+
         # 2. Add canonical_message.json (what was signed)
-        canonical_message = certificate.get("signature", {}).get("canonical_message", {})
+        canonical_message = certificate.get("signature", {}).get(
+            "canonical_message", {}
+        )
         canonical_json = json.dumps(canonical_message, indent=2, sort_keys=True)
-        zipf.writestr('canonical_message.json', canonical_json)
-        
+        zipf.writestr("canonical_message.json", canonical_json)
+
         # 3. Add verification_report.json
         verify_json = json.dumps(verification_report, indent=2, sort_keys=True)
-        zipf.writestr('verification_report.json', verify_json)
-        
+        zipf.writestr("verification_report.json", verify_json)
+
         # 4. Add public_key.pem
-        zipf.writestr('public_key.pem', public_key_pem)
-        
+        zipf.writestr("public_key.pem", public_key_pem)
+
         # 5. Add README.txt with offline verification instructions
         readme_content = generate_defense_readme(certificate, verification_report)
-        zipf.writestr('README.txt', readme_content)
-    
+        zipf.writestr("README.txt", readme_content)
+
     zip_bytes = buffer.getvalue()
     buffer.close()
-    
+
     return zip_bytes
 
 
-def generate_defense_readme(certificate: Dict[str, Any], verification_report: Dict[str, Any]) -> str:
+def generate_defense_readme(
+    certificate: Dict[str, Any], verification_report: Dict[str, Any]
+) -> str:
     """
     Generate README for defense bundle with offline verification instructions.
-    
+
     This README is designed for legal audiences and provides clear,
     step-by-step instructions for verifying certificate integrity.
     """
     cert_id = certificate.get("certificate_id", "UNKNOWN")
-    timestamp = certificate.get("issued_at_utc", certificate.get("timestamp", "UNKNOWN"))
+    timestamp = certificate.get(
+        "issued_at_utc", certificate.get("timestamp", "UNKNOWN")
+    )
     human_reviewed = certificate.get("human_reviewed", False)
     model_name = certificate.get("model_name", "UNKNOWN")
-    
+
     readme = f"""
 =================================================================
 COURTROOM DEFENSE BUNDLE - CERTIFICATE VERIFICATION INSTRUCTIONS
@@ -749,5 +769,5 @@ For technical support:
 
 =================================================================
 """
-    
+
     return readme.strip()

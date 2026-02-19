@@ -26,7 +26,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-
 # JWT Configuration
 # In production, use RS256 with public key from identity provider
 # For MVP, using HS256 with secret key
@@ -40,15 +39,16 @@ security = HTTPBearer()
 class Identity(BaseModel):
     """
     Authenticated identity extracted from JWT.
-    
+
     This is the source of truth for tenant context and user identity.
     Client cannot forge this - it's derived from cryptographically validated JWT.
     """
+
     sub: str  # User ID (subject)
     tenant_id: str  # Tenant ID (from JWT claim)
     role: str  # User role (clinician, auditor, admin)
     exp: Optional[int] = None  # Expiration timestamp
-    
+
     def has_role(self, required_role: str) -> bool:
         """Check if identity has the required role."""
         return self.role == required_role or self.role == "admin"
@@ -57,13 +57,13 @@ class Identity(BaseModel):
 def decode_jwt(token: str) -> dict:
     """
     Decode and validate JWT token.
-    
+
     Args:
         token: JWT token string
-        
+
     Returns:
         Decoded JWT payload
-        
+
     Raises:
         JWTError: If token is invalid, expired, or malformed
     """
@@ -76,8 +76,8 @@ def decode_jwt(token: str) -> dict:
                 "verify_signature": True,
                 "verify_exp": True,
                 "require_exp": True,
-                "require_sub": True
-            }
+                "require_sub": True,
+            },
         )
         return payload
     except JWTError as e:
@@ -85,69 +85,69 @@ def decode_jwt(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "error": "invalid_token",
-                "message": f"Token validation failed: {str(e)}"
+                "message": f"Token validation failed: {str(e)}",
             },
             headers={"WWW-Authenticate": "Bearer"},
         )
 
 
 async def get_current_identity(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> Identity:
     """
     Extract and validate identity from JWT token.
-    
+
     This is the primary authentication mechanism for CDIL.
     All routes requiring authentication should depend on this function.
-    
+
     Args:
         credentials: HTTP Bearer credentials from Authorization header
-        
+
     Returns:
         Validated Identity object
-        
+
     Raises:
         HTTPException: 401 if token is invalid or missing required claims
     """
     token = credentials.credentials
-    
+
     try:
         payload = decode_jwt(token)
-        
+
         # Extract required claims
         sub = payload.get("sub")
         tenant_id = payload.get("tenant_id")
         role = payload.get("role")
         exp = payload.get("exp")
-        
+
         # Validate required claims
         if not sub:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
                     "error": "missing_claim",
-                    "message": "Token missing 'sub' claim"
-                }
+                    "message": "Token missing 'sub' claim",
+                },
             )
-        
+
         if not tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
                     "error": "missing_claim",
-                    "message": "Token missing 'tenant_id' claim"
-                }
+                    "message": "Token missing 'tenant_id' claim",
+                },
             )
-        
+
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
                     "error": "missing_claim",
-                    "message": "Token missing 'role' claim"
-                }
+                    "message": "Token missing 'role' claim",
+                },
             )
-        
+
         # Validate role value
         valid_roles = {"clinician", "auditor", "admin", "ehr_gateway"}
         if role not in valid_roles:
@@ -155,17 +155,12 @@ async def get_current_identity(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
                     "error": "invalid_role",
-                    "message": f"Invalid role '{role}'. Must be one of: {valid_roles}"
-                }
+                    "message": f"Invalid role '{role}'. Must be one of: {valid_roles}",
+                },
             )
-        
-        return Identity(
-            sub=sub,
-            tenant_id=tenant_id,
-            role=role,
-            exp=exp
-        )
-        
+
+        return Identity(sub=sub, tenant_id=tenant_id, role=role, exp=exp)
+
     except HTTPException:
         raise
     except Exception as e:
@@ -173,73 +168,73 @@ async def get_current_identity(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "error": "authentication_failed",
-                "message": f"Failed to authenticate: {str(e)}"
-            }
+                "message": f"Failed to authenticate: {str(e)}",
+            },
         )
 
 
 def require_role(required_role: str):
     """
     Dependency factory for role-based access control.
-    
+
     Usage:
         @router.post("/certificates")
         async def issue_certificate(
             identity: Identity = Depends(require_role("clinician"))
         ):
             ...
-    
+
     Args:
         required_role: Role required to access the endpoint
-        
+
     Returns:
         Dependency function that validates role
     """
-    async def role_checker(identity: Identity = Depends(get_current_identity)) -> Identity:
+
+    async def role_checker(
+        identity: Identity = Depends(get_current_identity),
+    ) -> Identity:
         if not identity.has_role(required_role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "error": "insufficient_permissions",
-                    "message": f"Role '{required_role}' required. You have: '{identity.role}'"
-                }
+                    "message": f"Role '{required_role}' required. You have: '{identity.role}'",
+                },
             )
         return identity
-    
+
     return role_checker
 
 
 # Helper function for generating dev/test tokens
 def create_jwt_token(
-    sub: str,
-    tenant_id: str,
-    role: str,
-    expires_in_seconds: int = 3600
+    sub: str, tenant_id: str, role: str, expires_in_seconds: int = 3600
 ) -> str:
     """
     Create a JWT token for development/testing.
-    
+
     In production, tokens are issued by your identity provider (e.g., Auth0, Cognito).
     This function is for testing and development only.
-    
+
     Args:
         sub: User ID
         tenant_id: Tenant ID
         role: User role
         expires_in_seconds: Token expiration time (default 1 hour)
-        
+
     Returns:
         JWT token string
     """
     now = datetime.now(timezone.utc)
     exp = int(now.timestamp()) + expires_in_seconds
-    
+
     payload = {
         "sub": sub,
         "tenant_id": tenant_id,
         "role": role,
         "exp": exp,
-        "iat": int(now.timestamp())
+        "iat": int(now.timestamp()),
     }
-    
+
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)

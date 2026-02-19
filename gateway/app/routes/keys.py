@@ -14,7 +14,7 @@ router = APIRouter(prefix="/v1/keys", tags=["keys"])
 async def list_public_keys() -> List[Dict[str, Any]]:
     """
     List all available public keys.
-    
+
     Returns list of keys with key_id, jwk, and status.
     """
     keys = list_keys()
@@ -25,7 +25,7 @@ async def list_public_keys() -> List[Dict[str, Any]]:
 async def get_public_key(key_id: str) -> Dict[str, Any]:
     """
     Get a specific public key by key_id.
-    
+
     Returns JWK public key object only (not wrapped).
     """
     key = get_key(key_id)

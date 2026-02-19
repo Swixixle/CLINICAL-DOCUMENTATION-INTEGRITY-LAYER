@@ -7,32 +7,28 @@ This module provides backward-compatible helpers for tests that used X-Tenant-Id
 from gateway.tests.test_helpers import generate_test_jwt
 
 
-def create_jwt_headers(tenant_id: str, role: str = "clinician", sub: str = None) -> dict:
+def create_jwt_headers(
+    tenant_id: str, role: str = "clinician", sub: str = None
+) -> dict:
     """
     Create JWT authentication headers for testing.
-    
+
     This is a convenience wrapper that replaces the old X-Tenant-Id pattern.
-    
+
     Args:
         tenant_id: Tenant identifier (derived from JWT, not header)
         role: User role (clinician, auditor, admin)
         sub: User ID (auto-generated if not provided)
-        
+
     Returns:
         Dictionary with Authorization header
     """
     if sub is None:
         sub = f"test-user-{tenant_id}"
-    
-    token = generate_test_jwt(
-        sub=sub,
-        tenant_id=tenant_id,
-        role=role
-    )
-    
-    return {
-        "Authorization": f"Bearer {token}"
-    }
+
+    token = generate_test_jwt(sub=sub, tenant_id=tenant_id, role=role)
+
+    return {"Authorization": f"Bearer {token}"}
 
 
 def create_clinician_headers(tenant_id: str, sub: str = None) -> dict:

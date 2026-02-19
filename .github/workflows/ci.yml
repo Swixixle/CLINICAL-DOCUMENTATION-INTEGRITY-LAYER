@@ -30,7 +30,11 @@ jobs:
     
     - name: Run linter (ruff)
       run: |
-        ruff check gateway || true
+        ruff check gateway
+    
+    - name: Check formatting (black)
+      run: |
+        black --check gateway
     
     - name: Run tests
       run: |

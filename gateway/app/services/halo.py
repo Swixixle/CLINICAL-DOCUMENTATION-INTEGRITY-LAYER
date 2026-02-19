@@ -43,11 +43,11 @@ def build_halo_chain(
     rules_applied: List[str],
     model_fingerprint: str,
     param_snapshot: Dict[str, Any],
-    execution: Dict[str, Any]
+    execution: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Build a HALO v1 chain from explicit transaction parameters.
-    
+
     Args:
         transaction_id: Unique transaction identifier
         gateway_timestamp_utc: ISO 8601 UTC timestamp
@@ -70,7 +70,7 @@ def build_halo_chain(
             - token_usage: Token usage stats (optional)
             - latency_ms: Latency in milliseconds (optional)
             - denial_reason: Reason for denial (optional)
-    
+
     Returns:
         Dictionary with:
             - halo_version: "v1"
@@ -80,40 +80,40 @@ def build_halo_chain(
     """
     blocks = []
     block_hashes = []
-    
+
     # Block 1: Genesis
     block1 = {
         "transaction_id": transaction_id,
         "gateway_timestamp_utc": gateway_timestamp_utc,
         "environment": environment,
-        "client_id": client_id
+        "client_id": client_id,
     }
     blocks.append(block1)
     h1 = hash_c14n(block1)
     block_hashes.append(h1)
-    
+
     # Block 2: Intent
     block2 = {
         "prev_hash": h1,
         "intent_manifest": intent_manifest,
         "feature_tag": feature_tag,
-        "user_ref": user_ref
+        "user_ref": user_ref,
     }
     blocks.append(block2)
     h2 = hash_c14n(block2)
     block_hashes.append(h2)
-    
+
     # Block 3: Inputs
     block3 = {
         "prev_hash": h2,
         "prompt_hash": prompt_hash,
         "rag_hash": rag_hash,
-        "multimodal_hash": multimodal_hash
+        "multimodal_hash": multimodal_hash,
     }
     blocks.append(block3)
     h3 = hash_c14n(block3)
     block_hashes.append(h3)
-    
+
     # Block 4: Policy + Model
     block4 = {
         "prev_hash": h3,
@@ -121,12 +121,12 @@ def build_halo_chain(
         "policy_change_ref": policy_change_ref,
         "rules_applied": rules_applied,
         "model_fingerprint": model_fingerprint,
-        "param_snapshot": param_snapshot
+        "param_snapshot": param_snapshot,
     }
     blocks.append(block4)
     h4 = hash_c14n(block4)
     block_hashes.append(h4)
-    
+
     # Block 5: Output
     block5 = {
         "prev_hash": h4,
@@ -134,27 +134,27 @@ def build_halo_chain(
         "output_hash": execution.get("output_hash"),
         "token_usage": execution.get("token_usage"),
         "latency_ms": execution.get("latency_ms"),
-        "denial_reason": execution.get("denial_reason")
+        "denial_reason": execution.get("denial_reason"),
     }
     blocks.append(block5)
     h5 = hash_c14n(block5)
     block_hashes.append(h5)
-    
+
     return {
         "halo_version": HALO_VERSION,
         "blocks": blocks,
         "block_hashes": block_hashes,
-        "final_hash": h5
+        "final_hash": h5,
     }
 
 
 def verify_halo_chain(halo: Dict[str, Any]) -> Dict[str, Any]:
     """
     Verify the integrity of an Integrity Chain (HALO).
-    
+
     Args:
         halo: Integrity Chain dictionary with blocks and block_hashes
-        
+
     Returns:
         Dictionary with:
             - valid: bool indicating if chain is valid
@@ -166,77 +166,86 @@ def verify_halo_chain(halo: Dict[str, Any]) -> Dict[str, Any]:
                     - actual: str
     """
     discrepancies = []
-    
+
     # Check version
     if halo.get("halo_version") != "v1":
-        discrepancies.append({
-            "block_index": -1,
-            "field": "halo_version",
-            "expected": "v1",
-            "actual": halo.get("halo_version")
-        })
-    
+        discrepancies.append(
+            {
+                "block_index": -1,
+                "field": "halo_version",
+                "expected": "v1",
+                "actual": halo.get("halo_version"),
+            }
+        )
+
     blocks = halo.get("blocks", [])
     claimed_hashes = halo.get("block_hashes", [])
-    
+
     # Check we have 5 blocks
     if len(blocks) != 5:
-        discrepancies.append({
-            "block_index": -1,
-            "field": "block_count",
-            "expected": "5",
-            "actual": str(len(blocks))
-        })
+        discrepancies.append(
+            {
+                "block_index": -1,
+                "field": "block_count",
+                "expected": "5",
+                "actual": str(len(blocks)),
+            }
+        )
         return {"valid": False, "discrepancies": discrepancies}
-    
+
     if len(claimed_hashes) != 5:
-        discrepancies.append({
-            "block_index": -1,
-            "field": "hash_count",
-            "expected": "5",
-            "actual": str(len(claimed_hashes))
-        })
+        discrepancies.append(
+            {
+                "block_index": -1,
+                "field": "hash_count",
+                "expected": "5",
+                "actual": str(len(claimed_hashes)),
+            }
+        )
         return {"valid": False, "discrepancies": discrepancies}
-    
+
     # Recompute all hashes and verify chain
     computed_hashes = []
-    
+
     for i, block in enumerate(blocks):
         computed_hash = hash_c14n(block)
         computed_hashes.append(computed_hash)
-        
+
         # Check if hash matches claimed hash
         if computed_hash != claimed_hashes[i]:
-            discrepancies.append({
-                "block_index": i,
-                "field": "block_hash",
-                "expected": claimed_hashes[i],
-                "actual": computed_hash
-            })
-        
+            discrepancies.append(
+                {
+                    "block_index": i,
+                    "field": "block_hash",
+                    "expected": claimed_hashes[i],
+                    "actual": computed_hash,
+                }
+            )
+
         # Check prev_hash linkage (blocks 1-4 should reference previous hash)
         if i > 0:
             expected_prev = computed_hashes[i - 1]
             actual_prev = block.get("prev_hash")
-            
+
             if actual_prev != expected_prev:
-                discrepancies.append({
-                    "block_index": i,
-                    "field": "prev_hash",
-                    "expected": expected_prev,
-                    "actual": actual_prev
-                })
-    
+                discrepancies.append(
+                    {
+                        "block_index": i,
+                        "field": "prev_hash",
+                        "expected": expected_prev,
+                        "actual": actual_prev,
+                    }
+                )
+
     # Check final_hash
     if halo.get("final_hash") != computed_hashes[-1]:
-        discrepancies.append({
-            "block_index": -1,
-            "field": "final_hash",
-            "expected": computed_hashes[-1],
-            "actual": halo.get("final_hash")
-        })
-    
-    return {
-        "valid": len(discrepancies) == 0,
-        "discrepancies": discrepancies
-    }
+        discrepancies.append(
+            {
+                "block_index": -1,
+                "field": "final_hash",
+                "expected": computed_hashes[-1],
+                "actual": halo.get("final_hash"),
+            }
+        )
+
+    return {"valid": len(discrepancies) == 0, "discrepancies": discrepancies}

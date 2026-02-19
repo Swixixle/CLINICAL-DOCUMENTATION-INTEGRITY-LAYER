@@ -31,6 +31,7 @@ from gateway.app.routes import (
     shadow,
     shadow_intake,
     dashboard,
+    defense,
 )
 from gateway.app.db.migrate import ensure_schema, check_db_security
 
@@ -199,11 +200,9 @@ app.include_router(clinical.router)
 app.include_router(mock.router)
 app.include_router(analytics.router)
 app.include_router(shadow.router)
-# app.include_router(defense.router)  # Temporarily disabled due to syntax error in base branch
+app.include_router(defense.router)
 app.include_router(shadow_intake.router)
 app.include_router(dashboard.router)
-# app.include_router(defense.router)  # Duplicate - removed
-# Phase 2-4 routes (vendors, governance, gatekeeper) moved to separate PRs
 
 
 @app.get("/")

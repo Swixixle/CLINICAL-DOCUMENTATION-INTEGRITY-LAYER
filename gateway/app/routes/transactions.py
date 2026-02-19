@@ -16,12 +16,14 @@ router = APIRouter(prefix="/v1/transactions", tags=["transactions"])
 async def get_transaction_by_id(transaction_id: str) -> Dict[str, Any]:
     """
     Retrieve a transaction by its ID.
-    
+
     Returns the complete accountability packet.
     """
     packet = get_transaction(transaction_id)
     if not packet:
-        raise HTTPException(status_code=404, detail=f"Transaction not found: {transaction_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Transaction not found: {transaction_id}"
+        )
     return packet
 
 
@@ -29,21 +31,23 @@ async def get_transaction_by_id(transaction_id: str) -> Dict[str, Any]:
 async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
     """
     Verify the cryptographic integrity of a transaction.
-    
+
     Recomputes HALO chain from packet fields using explicit builder,
     compares to stored HALO, and verifies signature.
     Returns structured validation results with failures list.
     """
     from gateway.app.services.halo import build_halo_chain
     from gateway.app.services.storage import get_key
-    
+
     # Load packet
     packet = get_transaction(transaction_id)
     if not packet:
-        raise HTTPException(status_code=404, detail=f"Transaction not found: {transaction_id}")
-    
+        raise HTTPException(
+            status_code=404, detail=f"Transaction not found: {transaction_id}"
+        )
+
     failures = []
-    
+
     # Recompute HALO chain from packet fields
     try:
         recomputed_halo = build_halo_chain(
@@ -62,13 +66,13 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             rules_applied=packet["policy_receipt"]["rules_applied"],
             model_fingerprint=packet["model_fingerprint"],
             param_snapshot=packet["param_snapshot"],
-            execution=packet["execution"]
+            execution=packet["execution"],
         )
-        
+
         # Compare recomputed HALO final hash to stored HALO final hash
         stored_final_hash = packet.get("halo_chain", {}).get("final_hash")
         recomputed_final_hash = recomputed_halo.get("final_hash")
-        
+
         if stored_final_hash != recomputed_final_hash:
             # Hash leakage policy: return error code + prefixes only (first 16 chars)
             # Use error code instead of full hash values (security best practice)
@@ -77,41 +81,48 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
             if stored_final_hash and recomputed_final_hash:
                 debug_info = {
                     "stored_prefix": stored_final_hash[:16],
-                    "recomputed_prefix": recomputed_final_hash[:16]
+                    "recomputed_prefix": recomputed_final_hash[:16],
                 }
             failures.append(fail("halo_chain", "final_hash_mismatch", debug_info))
     except Exception as e:
         # Debug policy: exception type only (no full message to prevent information leakage)
-        failures.append(fail("halo_chain", "recomputation_failed", {"exception": type(e).__name__}))
-    
+        failures.append(
+            fail("halo_chain", "recomputation_failed", {"exception": type(e).__name__})
+        )
+
     # Verify signature using key from packet's verification.key_id
     signature_bundle = packet.get("verification", {})
     key_id = signature_bundle.get("key_id")
-    
+
     if not key_id:
         failures.append(fail("signature", "missing_key_id"))
     else:
         # Look up key in database
         key = get_key(key_id)
-        
+
         if not key:
             # Fallback to dev JWK only if environment is not prod
             if packet.get("environment") != "prod":
                 from pathlib import Path
                 import json
-                jwk_path = Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
+
+                jwk_path = (
+                    Path(__file__).parent.parent / "dev_keys" / "dev_public.jwk.json"
+                )
                 try:
-                    with open(jwk_path, 'r') as f:
+                    with open(jwk_path, "r") as f:
                         jwk = json.load(f)
                 except Exception:
-                    failures.append(fail("signature", "key_not_found_and_fallback_failed"))
+                    failures.append(
+                        fail("signature", "key_not_found_and_fallback_failed")
+                    )
                     jwk = None
             else:
                 failures.append(fail("signature", "key_not_found_in_prod"))
                 jwk = None
         else:
             jwk = key.get("jwk")
-        
+
         if jwk:
             try:
                 signature_valid = verify_signature(signature_bundle, jwk)
@@ -119,23 +130,22 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                     failures.append(fail("signature", "invalid_signature"))
             except Exception as e:
                 # Debug policy: exception type only (no full message to prevent information leakage)
-                failures.append(fail("signature", "verification_failed", {"exception": type(e).__name__}))
-    
+                failures.append(
+                    fail(
+                        "signature",
+                        "verification_failed",
+                        {"exception": type(e).__name__},
+                    )
+                )
+
     valid = len(failures) == 0
-    
+
     # Return structured result with both new failures list and legacy checks
-    result = {
-        "valid": valid,
-        "failures": failures
-    }
-    
+    result = {"valid": valid, "failures": failures}
+
     # Add legacy checks field for backward compatibility
     if not failures:
-        result["checks"] = {
-            "halo_chain": "valid",
-            "signature": "valid",
-            "key": "found"
-        }
+        result["checks"] = {"halo_chain": "valid", "signature": "valid", "key": "found"}
     else:
         result["checks"] = {}
         for failure in failures:
@@ -143,5 +153,5 @@ async def verify_transaction(transaction_id: str) -> Dict[str, Any]:
                 result["checks"]["halo_chain"] = "invalid"
             elif failure["check"] == "signature":
                 result["checks"]["signature"] = "invalid"
-    
+
     return result
