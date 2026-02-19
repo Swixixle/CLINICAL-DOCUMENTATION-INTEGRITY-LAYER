@@ -16,13 +16,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install black ruff
+        pip install black ruff pytest
     
     - name: Check Python syntax (compileall)
       run: |
@@ -43,3 +43,32 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
         ENV: TEST
         DISABLE_RATE_LIMITS: "1"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Docker image
+      run: |
+        docker build -t cdil-gateway:ci-test .
+    
+    - name: Test Docker image
+      run: |
+        # Start container in background
+        docker run -d --name cdil-test \
+          -e JWT_SECRET_KEY=test-secret-key \
+          -e CDIL_DB_PATH=/data/test.db \
+          -p 8000:8000 \
+          cdil-gateway:ci-test
+        
+        # Wait for container to be ready
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:8000/v1/health/status || exit 1
+        
+        # Cleanup
+        docker stop cdil-test
+        docker rm cdil-test
