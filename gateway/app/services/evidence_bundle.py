@@ -177,9 +177,18 @@ def generate_evidence_bundle(
                     if jwk.get("kty") == "RSA" and jwk.get("n") and jwk.get("e"):
                         import base64
                         
-                        # Decode base64url encoded values
-                        n_bytes = base64.urlsafe_b64decode(jwk["n"] + "==")  # Add padding
-                        e_bytes = base64.urlsafe_b64decode(jwk["e"] + "==")
+                        # Decode base64url encoded values with proper padding
+                        def decode_base64url(data):
+                            """Decode base64url with automatic padding."""
+                            # Add padding if needed
+                            padding = 4 - (len(data) % 4)
+                            if padding != 4:
+                                data += '=' * padding
+                            return base64.urlsafe_b64decode(data)
+                        
+                        # Decode components
+                        n_bytes = decode_base64url(jwk["n"])
+                        e_bytes = decode_base64url(jwk["e"])
                         
                         # Convert to integers
                         n = int.from_bytes(n_bytes, byteorder='big')
@@ -200,7 +209,7 @@ def generate_evidence_bundle(
                 # If public key extraction fails, add a note
                 zipf.writestr('public_key.pem', f"# Public key extraction failed: {str(e)}\n# Retrieve from /v1/keys/{key_id}")
         
-        # Add README_VERIFICATION.txt (README.txt per spec)
+        # Add README.txt (offline verification instructions)
         readme_content = generate_verification_readme(
             certificate.get('certificate_id', 'unknown'),
             verification_report.get('valid', False)

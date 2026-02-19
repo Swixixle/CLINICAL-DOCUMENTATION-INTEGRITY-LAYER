@@ -271,7 +271,7 @@ async def get_risk_queue(
         queue_items.append({
             "shadow_id": item.get("shadow_id"),
             "certificate_id": item.get("certificate_id"),
-            "band": item.get("score_band", "unknown").upper(),
+            "band": (item.get("score_band") or "unknown").upper(),
             "score": item.get("score"),
             "deficits": deficits[:3],  # Top 3
             "what_to_fix": "Add supporting evidence and documentation" if deficits else "No major issues",

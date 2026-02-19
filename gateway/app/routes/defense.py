@@ -117,16 +117,19 @@ async def simulate_alteration(
     finally:
         conn.close()
     
-    # For demonstration purposes, we'll simulate verification results
-    # In production, this would call the actual verification endpoint
+    # For demonstration purposes, we simulate verification results
+    # NOTE: This is a MOCK verification for demonstration only
+    # In production, call the actual verification endpoint via internal API
     
-    # Original certificate verification (simulated - assume PASS)
+    # Original certificate verification (MOCKED - assume PASS for demo)
     original_verification = {
         "valid": True,
         "status": "PASS",
         "integrity_chain": {"valid": True},
         "signature": {"valid": True},
-        "policy": {"valid": True}
+        "policy": {"valid": True},
+        "_mock": True,  # Indicate this is a mock result
+        "_note": "This is a simulated verification for demonstration purposes"
     }
     
     # Create mutated certificate by replacing note_hash
@@ -135,14 +138,16 @@ async def simulate_alteration(
     original_note_hash = certificate.get("note_hash")
     mutated_certificate["note_hash"] = mutated_note_hash
     
-    # Mutated certificate verification (simulated - FAIL if hash doesn't match)
+    # Mutated certificate verification (SIMULATED - FAIL if hash doesn't match)
     hash_matches = original_note_hash == mutated_note_hash
     mutated_verification = {
         "valid": hash_matches,
         "status": "PASS" if hash_matches else "FAIL",
         "integrity_chain": {"valid": hash_matches},
         "signature": {"valid": hash_matches},
-        "policy": {"valid": True}
+        "policy": {"valid": True},
+        "_mock": True,  # Indicate this is a mock result
+        "_note": "This is a simulated verification for demonstration purposes"
     }
     
     # Build demonstration explanation

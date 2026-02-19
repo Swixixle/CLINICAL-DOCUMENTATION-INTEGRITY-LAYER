@@ -29,7 +29,7 @@ services:
       - cdil-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/v1/health/status', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health/status', timeout=5).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
