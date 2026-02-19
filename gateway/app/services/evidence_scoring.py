@@ -341,6 +341,12 @@ def score_note_defensibility(
         "summary": summary
     }
 
+"""
+Evidence Scoring Engine for Shadow Mode.
+
+This module implements rule-based scoring for clinical documentation quality.
+All rules are heuristic indicators, not clinical truth or billing advice.
+
 
 # ============================================================================
 # Alternative Evidence Scoring Implementation (More Comprehensive)

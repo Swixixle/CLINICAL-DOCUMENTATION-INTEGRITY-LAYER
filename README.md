@@ -1,7 +1,10 @@
 # Clinical Documentation Integrity Layer (CDIL)
 
-> **"If it's not exportable and understandable by a lawyer, it didn't happen."**
+> **"We detect preventable revenue loss caused by documentation evidence gaps — without touching your EMR."**
 
+## What CDIL Is
+
+CDIL is a **cryptographically verifiable documentation integrity and audit reconstruction engine** for AI-generated clinical notes.
 CDIL is a **Verifiable Evidence Layer** for AI-generated clinical documentation. This implementation provides:
 
 1. **Shadow Mode Sidecar** - Run alongside existing workflows without EMR integration
@@ -14,10 +17,52 @@ CDIL is a **Verifiable Evidence Layer** for AI-generated clinical documentation.
 - Documentation quality analysis and risk identification
 - Cryptographic proof of integrity for AI-generated clinical notes
 
-Every certificate is **exportable, independently verifiable, and legally defensible**.
+**Value Proposition (Pick One):**
+
+### For Hospital CFOs: Revenue Protection
+Detect documentation-driven revenue loss **before** claims are submitted. Shadow Mode analyzes notes in pilot mode to identify evidence deficits that lead to denials.
+
+- ✅ No EMR integration required (pilot-friendly)
+- ✅ Measurable ROI from first deployment
+- ✅ Deterministic, explainable scoring (no black-box AI)
+
+### For Hospital CISOs: AI Governance Infrastructure
+Provide cryptographic proof that AI clinical documentation was generated under governance, reviewed by humans, and hasn't been tampered with.
+
+- ✅ Per-tenant signing keys (no cross-tenant forgery)
+- ✅ Exportable evidence bundles for legal/audit defense
+- ✅ Courtroom-grade integrity certificates
+
+### For Compliance Teams: Audit Defense
+Create defensible audit trails for AI-generated documentation with offline-verifiable evidence bundles.
+
+- ✅ Exportable JSON/ZIP bundles with verification instructions
+- ✅ No API access needed for verification
+- ✅ Meets 21 CFR Part 11 electronic signature requirements
 
 ---
 
+## What CDIL Is NOT
+
+CDIL is **infrastructure**, not a complete solution. It is:
+
+- ❌ Not a full RCM (Revenue Cycle Management) platform
+- ❌ Not a CDI (Clinical Documentation Improvement) coding engine
+- ❌ Not an Epic plugin or EHR integration
+- ❌ Not a billing optimizer
+
+CDIL sits **between AI output and payer/auditor scrutiny**, providing cryptographic integrity and evidence deficit intelligence.
+
+---
+
+## Phase 1 Scope
+
+This implementation focuses exclusively on **Evidence Bundle Export** and **Shadow Mode (Revenue Risk Intelligence)**:
+
+### Evidence Integrity (Cryptographic)
+- **Evidence Bundles (JSON)** - Structured bundles with certificate, verification instructions, and public key references
+- **Evidence Bundles (ZIP)** - Complete archive with certificate.json, certificate.pdf, evidence_bundle.json, verification_report.json
+- **Per-Tenant Keys** - Cryptographic isolation across organizations (no cross-tenant forgery)
 ## 🎯 Shadow Mode: The Most Incredible Sidecar
 
 CDIL can run **alongside** existing documentation workflows (AI or non-AI) without requiring Epic integration. This makes it perfect for specialist pilots and proof-of-concept deployments.
@@ -66,6 +111,12 @@ This implementation focuses on **Shadow Mode Sidecar + Evidence Bundle Export + 
 - **Executive Dashboard** - Summary metrics, risk queue, and defense simulation
 - **Per-Tenant Keys** - Cryptographic isolation across organizations
 - **Offline Verification** - Bundles can be verified without API access
+
+### Shadow Mode (Revenue Intelligence)
+- **Evidence Deficit Scoring** - Deterministic analysis of documentation gaps
+- **Revenue Risk Modeling** - Transparent calculations of potential denial risk
+- **Executive Dashboard** - CFO-friendly metrics (% defensible, annual revenue leakage)
+- **No EMR Integration** - Operates on exported note batches for pilot deployments
 
 **Not Included in Phase 1:**
 - Vendor Registry (Phase 2)
@@ -313,6 +364,41 @@ GET /v1/certificates/{cert_id}/evidence-bundle.zip
 - **Litigation Defense** - Prove documentation hasn't been altered since creation
 - **Compliance Audits** - Demonstrate AI oversight and human review
 - **Offline Verification** - Legal and audit teams can verify without API access
+
+---
+
+## Deployment
+
+### Quick Start with Docker
+
+```bash
+# Build image
+docker build -t cdil-gateway:v1.0.0 .
+
+# Run with Docker Compose
+docker-compose up -d
+
+# Check health
+curl http://localhost:8000/healthz
+```
+
+### Production Deployment
+
+**See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete production deployment instructions including:**
+
+- Environment variables and secrets management
+- TLS/HTTPS configuration
+- Key rotation procedures
+- Logging, monitoring, and PHI handling
+- High availability and scaling guidance
+- Kubernetes manifests and examples
+
+**⚠️ CRITICAL:** Production deployments MUST NOT use the dev secret key (it is committed to git and COMPROMISED). Use AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager.
+
+**Security Documentation:**
+- [Per-Tenant Key Security](docs/PER_TENANT_KEY_SECURITY.md) - Guarantees about cross-tenant isolation
+- [Production Readiness Checklist](docs/PRODUCTION_READINESS.md) - Complete hardening checklist
+- [Threat Model](docs/THREAT_MODEL_AND_TRUST_GUARANTEES.md) - Security architecture and trust boundaries
 
 ---
 
