@@ -20,8 +20,8 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/Swixixle/CLINICAL-DOCUMENTATION-INEGRITY-LAYER.git
-cd CLINICAL-DOCUMENTATION-INEGRITY-LAYER
+git clone https://github.com/Swixixle/CLINICAL-DOCUMENTATION-INTEGRITY-LAYER.git
+cd CLINICAL-DOCUMENTATION-INTEGRITY-LAYER
 
 # Build and run with Docker Compose
 docker-compose up -d

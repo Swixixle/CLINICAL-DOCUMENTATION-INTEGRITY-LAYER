@@ -1,5 +1,16 @@
 version: '3.8'
 
+# CDIL Gateway - Docker Compose Configuration
+#
+# REQUIRED: Create a .env file with your configuration
+# See .env.example for template
+#
+# Quick start:
+#   1. cp .env.example .env
+#   2. Generate JWT secret: openssl rand -base64 32
+#   3. Update .env with your secret
+#   4. docker-compose up -d
+
 services:
   cdil-gateway:
     build:
@@ -15,9 +26,9 @@ services:
       # Database
       - CDIL_DB_PATH=/data/eli_sentinel.db
       
-      # JWT Configuration (DO NOT USE THESE IN PRODUCTION)
-      # In production, use secrets management (AWS Secrets Manager, etc.)
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
+      # JWT Configuration
+      # JWT_SECRET_KEY is REQUIRED - set in .env file
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env file}
       - JWT_ALGORITHM=HS256
       
       # Logging

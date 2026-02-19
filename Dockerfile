@@ -42,7 +42,8 @@ ENV PATH=/home/cdil/.local/bin:$PATH \
 ENV CDIL_DB_PATH=/data/eli_sentinel.db \
     LOG_LEVEL=INFO \
     LOG_FORMAT=json \
-    RATE_LIMIT_ENABLED=true
+    RATE_LIMIT_ENABLED=true \
+    UVICORN_WORKERS=4
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
@@ -55,4 +56,5 @@ EXPOSE 8000
 USER cdil
 
 # Run application with uvicorn
-CMD ["uvicorn", "gateway.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Number of workers can be configured via UVICORN_WORKERS env var (default: 4)
+CMD ["sh", "-c", "uvicorn gateway.app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS}"]
