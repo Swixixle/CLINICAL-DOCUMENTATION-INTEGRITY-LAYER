@@ -1089,12 +1089,12 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Monitor",
                     category="monitor",
                     why_payer_denies="Sepsis diagnosis without vital signs and lab monitoring fails MEAT criteria",
-                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    what_to_add="Document lactate levels, vital signs (MAP/BP/HR), blood cultures, and urine output.",
                     evidence_refs=[],
                     confidence=0.95,
                     condition="sepsis",
                     missing=["lactate", "vital signs", "cultures"],
-                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    fix="Document lactate levels, vital signs (MAP/BP/HR), blood cultures, and urine output.",
                 )
             )
 
@@ -1114,7 +1114,7 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of sepsis source or trajectory undermines medical necessity",
-                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    what_to_add="Document suspected infection source (pneumonia/UTI), imaging (CXR/CT), and culture results.",
                     evidence_refs=[],
                     confidence=0.90,
                     condition="sepsis",
@@ -1123,7 +1123,7 @@ class DenialShieldScorer:
                         "organ dysfunction",
                         "clinical trajectory",
                     ],
-                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    fix="Document suspected infection source (pneumonia/UTI), imaging (CXR/CT), and culture results.",
                 )
             )
 
@@ -1143,12 +1143,12 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Assess",
                     category="assess",
                     why_payer_denies="Assessment must specify sepsis criteria and organ dysfunction",
-                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    what_to_add="Document organ dysfunction (AKI/hypotension/altered mental status) and SOFA score criteria.",
                     evidence_refs=[],
                     confidence=0.88,
                     condition="sepsis",
                     missing=["SOFA criteria", "organ dysfunction", "sepsis criteria"],
-                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    fix="Document organ dysfunction (AKI/hypotension/altered mental status) and SOFA score criteria.",
                 )
             )
 
@@ -1170,12 +1170,12 @@ class DenialShieldScorer:
                     title="Sepsis: Missing Treat",
                     category="treat",
                     why_payer_denies="Sepsis without documented antibiotics and fluid resuscitation fails to justify medical necessity",
-                    what_to_add="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    what_to_add="Document broad-spectrum antibiotics (vancomycin/zosyn/cefepime) with timing and fluid resuscitation (30 ml/kg).",
                     evidence_refs=[],
                     confidence=0.96,
                     condition="sepsis",
                     missing=["antibiotics", "fluid resuscitation", "source control"],
-                    fix="Document suspected source, lactate trend, organ dysfunction criteria, and antibiotics/fluids timing.",
+                    fix="Document broad-spectrum antibiotics (vancomycin/zosyn/cefepime) with timing and fluid resuscitation (30 ml/kg).",
                 )
             )
 
@@ -1206,12 +1206,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Monitor",
                     category="monitor",
                     why_payer_denies="ARF diagnosis without oxygenation monitoring fails MEAT criteria",
-                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    what_to_add="Document SpO2 values, ABG results with PaO2/PaCO2, and respiratory rate.",
                     evidence_refs=[],
                     confidence=0.93,
                     condition="acute respiratory failure",
                     missing=["SpO2", "ABG", "respiratory rate"],
-                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    fix="Document SpO2 values, ABG results with PaO2/PaCO2, and respiratory rate.",
                 )
             )
 
@@ -1231,12 +1231,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of respiratory status undermines medical necessity",
-                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    what_to_add="Document imaging (CXR/CT chest), blood gas interpretation, and pulmonary exam findings.",
                     evidence_refs=[],
                     confidence=0.87,
                     condition="acute respiratory failure",
                     missing=["hypoxia assessment", "clinical trajectory"],
-                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    fix="Document imaging (CXR/CT chest), blood gas interpretation, and pulmonary exam findings.",
                 )
             )
 
@@ -1256,12 +1256,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Assess",
                     category="assess",
                     why_payer_denies="Assessment must specify ARF type (hypoxic/hypercapnic) and severity",
-                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    what_to_add="Specify hypoxic vs hypercapnic type and document acute vs chronic presentation.",
                     evidence_refs=[],
                     confidence=0.85,
                     condition="acute respiratory failure",
                     missing=["ARF type", "severity"],
-                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    fix="Specify hypoxic vs hypercapnic type and document acute vs chronic presentation.",
                 )
             )
 
@@ -1283,12 +1283,12 @@ class DenialShieldScorer:
                     title="ARF: Missing Treat",
                     category="treat",
                     why_payer_denies="ARF without documented oxygen/ventilation support fails to justify medical necessity",
-                    what_to_add="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    what_to_add="Document oxygen delivery method (NC/HFNC/BiPAP/ventilator) with settings and titration plan.",
                     evidence_refs=[],
                     confidence=0.94,
                     condition="acute respiratory failure",
                     missing=["oxygen therapy", "ventilation support"],
-                    fix="Document hypoxic vs hypercapnic criteria with SpO2/ABG values and the oxygen/ventilatory support plan.",
+                    fix="Document oxygen delivery method (NC/HFNC/BiPAP/ventilator) with settings and titration plan.",
                 )
             )
 
@@ -1319,12 +1319,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Monitor",
                     category="monitor",
                     why_payer_denies="Malnutrition diagnosis without nutritional markers fails MEAT criteria",
-                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    what_to_add="Document weight trend, BMI calculation, percentage weight loss, and dietary intake assessment.",
                     evidence_refs=[],
                     confidence=0.92,
                     condition="malnutrition",
                     missing=["weight", "BMI", "albumin", "dietary intake"],
-                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    fix="Document weight trend, BMI calculation, percentage weight loss, and dietary intake assessment.",
                 )
             )
 
@@ -1344,12 +1344,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Evaluate",
                     category="evaluate",
                     why_payer_denies="No evaluation of malnutrition severity undermines medical necessity",
-                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    what_to_add="Document nutrition consult/dietitian involvement, albumin/prealbumin levels if available.",
                     evidence_refs=[],
                     confidence=0.86,
                     condition="malnutrition",
                     missing=["severity", "clinical trajectory"],
-                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    fix="Document nutrition consult/dietitian involvement, albumin/prealbumin levels if available.",
                 )
             )
 
@@ -1369,12 +1369,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Assess",
                     category="assess",
                     why_payer_denies="Assessment must specify malnutrition criteria (BMI, albumin, weight loss)",
-                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    what_to_add="Specify severity (mild/moderate/severe) and note muscle wasting or cachexia if present.",
                     evidence_refs=[],
                     confidence=0.84,
                     condition="malnutrition",
                     missing=["malnutrition criteria", "severity grade"],
-                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    fix="Specify severity (mild/moderate/severe) and note muscle wasting or cachexia if present.",
                 )
             )
 
@@ -1396,12 +1396,12 @@ class DenialShieldScorer:
                     title="Malnutrition: Missing Treat",
                     category="treat",
                     why_payer_denies="Malnutrition without documented nutritional intervention fails to justify medical necessity",
-                    what_to_add="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    what_to_add="Document nutritional intervention (supplements/tube feeds/TPN) with specific orders and follow-up plan.",
                     evidence_refs=[],
                     confidence=0.93,
                     condition="malnutrition",
                     missing=["nutritional support", "dietitian consult"],
-                    fix="Document severity, weight trend/BMI, intake, and the nutrition intervention (supplements/enteral/TPN) with follow-up.",
+                    fix="Document nutritional intervention (supplements/tube feeds/TPN) with specific orders and follow-up plan.",
                 )
             )
 
