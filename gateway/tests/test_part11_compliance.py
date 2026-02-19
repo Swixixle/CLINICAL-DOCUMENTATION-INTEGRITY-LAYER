@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-from app.db.part11_operations import (
+from gateway.app.db.part11_operations import (
     create_tenant,
     get_tenant,
     create_encounter,

@@ -12,8 +12,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-from app.db.migrate import get_connection
-from app.models.part11 import (
+from gateway.app.db.migrate import get_connection
+from gateway.app.models.part11 import (
     Tenant,
     Encounter,
     Note,
