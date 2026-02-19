@@ -646,6 +646,36 @@ Each phase will have:
 
 ---
 
+## Contributing & PR Management
+
+### Managing Copilot PRs
+
+This repository uses GitHub Copilot for automated development. To manage stale or failed PRs:
+
+**Quick cleanup of stale PRs:**
+```bash
+# List stale [WIP] PRs (dry run)
+python tools/manage_stale_prs.py --dry-run
+
+# Close stale PRs with no activity in 7+ days
+python tools/manage_stale_prs.py --days 7 --close
+```
+
+**Manual cleanup with GitHub CLI:**
+```bash
+# List open Copilot PRs
+gh pr list --author Copilot --state open
+
+# Close specific PRs
+gh pr close <PR_NUMBER> --comment "Closing stale [WIP] PR"
+```
+
+**For detailed guidance, see:**
+- [Managing Copilot PRs Guide](docs/MANAGING_COPILOT_PRS.md) - Complete guide for handling failed/stale PRs
+- Automated cleanup runs weekly via GitHub Actions (`.github/workflows/close-stale-prs.yml`)
+
+---
+
 ## License
 
 See LICENSE file for details.
