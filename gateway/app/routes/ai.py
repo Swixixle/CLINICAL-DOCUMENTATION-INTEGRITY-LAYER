@@ -20,6 +20,7 @@ router = APIRouter(prefix="/v1/ai", tags=["ai"])
 
 class AICallResponse(BaseModel):
     """Response from /v1/ai/call endpoint."""
+
     transaction_id: str
     status: str  # "completed" or "denied"
     output: Optional[str] = None
@@ -30,7 +31,7 @@ class AICallResponse(BaseModel):
 async def ai_call(request: AICallRequest) -> AICallResponse:
     """
     Process an AI call with full governance and accountability.
-    
+
     Flow:
     1. Generate transaction_id and timestamp
     2. Compute content hashes
@@ -42,10 +43,12 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
     """
     # Step 1: Generate transaction_id and timestamp
     transaction_id = generate_uuid7()
-    gateway_timestamp_utc = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    
+    gateway_timestamp_utc = (
+        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+
     # Handle both new model_request and legacy model/temperature fields
-    if hasattr(request, 'model') and request.model:
+    if hasattr(request, "model") and request.model:
         # Legacy format
         model = request.model
         temperature = request.temperature if request.temperature is not None else 0.7
@@ -53,49 +56,55 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         # New format
         model = request.model_request.model
         temperature = request.model_request.temperature
-    
+
     # Step 2: Compute content hashes
-    prompt_text = request.prompt if isinstance(request.prompt, str) else str(request.prompt)
-    prompt_hash = sha256_hex(prompt_text.encode('utf-8'))
-    
+    prompt_text = (
+        request.prompt if isinstance(request.prompt, str) else str(request.prompt)
+    )
+    prompt_hash = sha256_hex(prompt_text.encode("utf-8"))
+
     rag_hash = None
     if request.rag_context:
         rag_hash = hash_c14n(request.rag_context)
-    
+
     # Step 3: Evaluate policy (pre-execution)
     policy_request = {
-        "provider": request.model_request.provider if request.model_request else "openai",
+        "provider": (
+            request.model_request.provider if request.model_request else "openai"
+        ),
         "model": model,
         "temperature": temperature,
-        "max_tokens": request.model_request.max_tokens if request.model_request else 2048,
+        "max_tokens": (
+            request.model_request.max_tokens if request.model_request else 2048
+        ),
         "feature_tag": request.feature_tag,
         "network_access": request.network_access,
         "tool_permissions": request.tool_permissions,
         "environment": request.environment,
-        "intent_manifest": request.intent_manifest
+        "intent_manifest": request.intent_manifest,
     }
-    
+
     policy_receipt = evaluate_request(policy_request, request.environment)
-    
+
     # Step 4: Execute AI call or create denial stub
     if policy_receipt["decision"] == "approved":
-        execution = execute({
-            "prompt": prompt_text,
-            "model": model,
-            "temperature": temperature
-        })
+        execution = execute(
+            {"prompt": prompt_text, "model": model, "temperature": temperature}
+        )
     else:
         # Denied execution stub
         denial_reasons = policy_receipt.get("denial_reasons") or []
-        denial_message = "; ".join(denial_reasons) if denial_reasons else "Policy violation"
+        denial_message = (
+            "; ".join(denial_reasons) if denial_reasons else "Policy violation"
+        )
         execution = {
             "outcome": "denied",
             "output_hash": None,
             "token_usage": None,
             "latency_ms": 0,
-            "denial_reason": denial_message
+            "denial_reason": denial_message,
         }
-    
+
     # Step 5: Build accountability packet
     packet = build_accountability_packet(
         transaction_id=transaction_id,
@@ -114,16 +123,18 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
         model_fingerprint=model,
         param_snapshot={"temperature": temperature},
         policy_decision=policy_receipt["decision"],
-        execution=execution
+        execution=execution,
     )
-    
+
     # Step 6: Persist to database
     store_transaction(packet)
-    
+
     # Step 7: Return response
     status = "completed" if execution["outcome"] == "approved" else "denied"
-    output_text = execution.get("output_text") if execution["outcome"] == "approved" else None
-    
+    output_text = (
+        execution.get("output_text") if execution["outcome"] == "approved" else None
+    )
+
     return AICallResponse(
         transaction_id=transaction_id,
         status=status,
@@ -132,6 +143,6 @@ async def ai_call(request: AICallRequest) -> AICallResponse:
             "policy_version_hash": policy_receipt["policy_version_hash"],
             "policy_change_ref": policy_receipt["policy_change_ref"],
             "final_hash": packet["halo_chain"]["final_hash"],
-            "signed": True
-        }
+            "signed": True,
+        },
     )

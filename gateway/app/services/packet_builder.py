@@ -10,7 +10,12 @@ specification.
 
 from typing import Any, Dict, List, Optional
 
-from gateway.app.services.halo import build_halo_chain, HALO_VERSION, C14N_VERSION, SIGNING_ALG
+from gateway.app.services.halo import (
+    build_halo_chain,
+    HALO_VERSION,
+    C14N_VERSION,
+    SIGNING_ALG,
+)
 from gateway.app.services.signer import sign_message
 
 
@@ -31,17 +36,17 @@ def build_accountability_packet(
     policy_decision: str,
     model_fingerprint: str,
     param_snapshot: Dict[str, Any],
-    execution: Dict[str, Any]
+    execution: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Build a complete Accountability Packet.
-    
+
     This function assembles the canonical packet format with:
     - All top-level fields (no packet_inputs wrapper)
     - HALO chain
     - Cryptographic signature
     - Protocol version metadata
-    
+
     Args:
         transaction_id: Unique transaction identifier
         gateway_timestamp_utc: ISO 8601 UTC timestamp
@@ -65,7 +70,7 @@ def build_accountability_packet(
             - token_usage: Token usage stats (optional)
             - latency_ms: Latency in milliseconds (optional)
             - denial_reason: Reason for denial (optional)
-    
+
     Returns:
         Complete accountability packet dictionary with:
         - All transaction fields at top level
@@ -92,20 +97,20 @@ def build_accountability_packet(
         rules_applied=rules_applied,
         model_fingerprint=model_fingerprint,
         param_snapshot=param_snapshot,
-        execution=execution
+        execution=execution,
     )
-    
+
     # Build canonical message for signing (exactly 4 fields)
     canonical_message = {
         "transaction_id": transaction_id,
         "gateway_timestamp_utc": gateway_timestamp_utc,
         "final_hash": halo_chain["final_hash"],
-        "policy_version_hash": policy_version_hash
+        "policy_version_hash": policy_version_hash,
     }
-    
+
     # Sign the message
     signature_bundle = sign_message(canonical_message)
-    
+
     # Assemble the complete packet (flat structure, no packet_inputs wrapper)
     packet = {
         # Core identifiers
@@ -113,44 +118,36 @@ def build_accountability_packet(
         "client_id": client_id,
         "environment": environment,
         "gateway_timestamp_utc": gateway_timestamp_utc,
-        
         # Intent
         "intent_manifest": intent_manifest,
         "feature_tag": feature_tag,
         "user_ref": user_ref,
-        
         # Model
         "model_fingerprint": model_fingerprint,
         "param_snapshot": param_snapshot,
-        
         # Content hashes
         "prompt_hash": prompt_hash,
         "rag_hash": rag_hash,
         "multimodal_hash": multimodal_hash,
-        
         # Policy receipt
         "policy_receipt": {
             "policy_version_hash": policy_version_hash,
             "policy_change_ref": policy_change_ref,
             "rules_applied": rules_applied,
-            "decision": policy_decision
+            "decision": policy_decision,
         },
-        
         # Execution result
         "execution": execution,
-        
         # HALO chain
         "halo_chain": halo_chain,
-        
         # Verification bundle
         "verification": signature_bundle,
-        
         # Protocol metadata (version pins)
         "protocol_metadata": {
             "halo_version": HALO_VERSION,
             "c14n_version": C14N_VERSION,
-            "signing_alg": SIGNING_ALG
-        }
+            "signing_alg": SIGNING_ALG,
+        },
     }
-    
+
     return packet
