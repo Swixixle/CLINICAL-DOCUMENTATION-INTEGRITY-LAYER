@@ -45,6 +45,10 @@ docker run -d \
     -p 8000:8000 \
     "$IMAGE_NAME"
 
+# NOTE: The JWT_SECRET_KEY above is for testing only.
+# NEVER use this value in production. Generate a secure secret with:
+# openssl rand -base64 32
+
 echo "Container started with name: $CONTAINER_NAME"
 
 # Wait for container to be ready

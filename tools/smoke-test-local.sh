@@ -23,7 +23,12 @@ rm -f "$CDIL_DB_PATH"
 # Start uvicorn in the background
 echo "Starting uvicorn server..."
 cd "$PROJECT_ROOT"
-uvicorn gateway.app.main:app --host 127.0.0.1 --port 8000 > /tmp/smoke_test_uvicorn.log 2>&1 &
+uvicorn gateway.app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --timeout-keep-alive 5 \
+    --timeout-graceful-shutdown 3 \
+    > /tmp/smoke_test_uvicorn.log 2>&1 &
 UVICORN_PID=$!
 
 echo "Server PID: $UVICORN_PID"
