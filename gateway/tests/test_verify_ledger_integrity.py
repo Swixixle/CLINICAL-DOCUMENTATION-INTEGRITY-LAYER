@@ -7,9 +7,6 @@ import hashlib
 import json
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
-
-import pytest
 
 
 def hash_content(content: str) -> str:
@@ -20,7 +17,7 @@ def hash_content(content: str) -> str:
 def create_test_database(db_path: str, num_events: int = 5) -> str:
     """Create a test database with audit events."""
     conn = sqlite3.connect(db_path)
-    
+
     # Create audit_events table
     conn.execute("""
         CREATE TABLE audit_events (
@@ -36,13 +33,14 @@ def create_test_database(db_path: str, num_events: int = 5) -> str:
             event_hash TEXT NOT NULL
         )
     """)
-    
+
     tenant_id = "tenant_test"
     actor_id = "actor_test"
     prev_hash = None
-    
+
     for i in range(num_events):
         import uuid
+
         event_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         object_type = "note"
@@ -50,20 +48,34 @@ def create_test_database(db_path: str, num_events: int = 5) -> str:
         action = "create"
         payload = {"description": f"Created note {i}"}
         payload_json = json.dumps(payload)
-        
+
         # Compute event hash
         hash_input = f"{prev_hash or ''}{timestamp}{object_type}{object_id}{action}{payload_json}"
         event_hash = hash_content(hash_input)
-        
-        conn.execute("""
+
+        conn.execute(
+            """
             INSERT INTO audit_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (event_id, tenant_id, timestamp, actor_id, object_type, object_id, action, payload_json, prev_hash, event_hash))
-        
+        """,
+            (
+                event_id,
+                tenant_id,
+                timestamp,
+                actor_id,
+                object_type,
+                object_id,
+                action,
+                payload_json,
+                prev_hash,
+                event_hash,
+            ),
+        )
+
         prev_hash = event_hash
-    
+
     conn.commit()
     conn.close()
-    
+
     return tenant_id
 
 
@@ -72,13 +84,13 @@ def test_verify_ledger_integrity_valid():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=10)
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 0
         assert "LEDGER INTEGRITY VERIFIED" in result.stdout
         assert "10" in result.stdout  # Total events
@@ -90,13 +102,13 @@ def test_verify_ledger_integrity_verbose():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=3)
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path, "--verbose"],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 0
         # Verbose messages go to stderr
         assert "Event 1/3:" in result.stderr or "Event 1/3:" in result.stdout
@@ -110,15 +122,15 @@ def test_verify_ledger_integrity_json_output():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=5)
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path, "--json"],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 0
-        
+
         # Parse JSON output
         data = json.loads(result.stdout)
         assert data["valid"] is True
@@ -132,7 +144,7 @@ def test_verify_ledger_integrity_tampered():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=5)
-        
+
         # Tamper with database
         conn = sqlite3.connect(db_path)
         conn.execute("""
@@ -142,13 +154,13 @@ def test_verify_ledger_integrity_tampered():
         """)
         conn.commit()
         conn.close()
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 1
         assert "LEDGER INTEGRITY VIOLATION DETECTED" in result.stdout
         assert "Hash mismatch - event has been tampered with" in result.stdout
@@ -160,7 +172,7 @@ def test_verify_ledger_integrity_chain_break():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=5)
-        
+
         # Break the chain by modifying prev_event_hash
         conn = sqlite3.connect(db_path)
         conn.execute("""
@@ -170,19 +182,19 @@ def test_verify_ledger_integrity_chain_break():
         """)
         conn.commit()
         conn.close()
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path, "--json"],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 1
-        
+
         data = json.loads(result.stdout)
         assert data["valid"] is False
         assert len(data["errors"]) > 0
-        
+
         # Check for chain break error
         errors = data["errors"]
         assert any("Chain break" in err["error"] for err in errors)
@@ -193,9 +205,9 @@ def test_verify_ledger_integrity_nonexistent_db():
     result = subprocess.run(
         ["./tools/verify-ledger-integrity.sh", "--db", "/nonexistent/path/db.db"],
         capture_output=True,
-        text=True
+        text=True,
     )
-    
+
     assert result.returncode == 2
     assert "Database not found" in result.stderr
 
@@ -205,15 +217,15 @@ def test_verify_ledger_integrity_empty_ledger():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         create_test_database(db_path, num_events=0)
-        
+
         result = subprocess.run(
             ["./tools/verify-ledger-integrity.sh", "--db", db_path, "--json"],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 0
-        
+
         data = json.loads(result.stdout)
         assert data["valid"] is True
         assert data["total_events"] == 0
@@ -222,11 +234,9 @@ def test_verify_ledger_integrity_empty_ledger():
 def test_verify_ledger_integrity_help():
     """Test help output."""
     result = subprocess.run(
-        ["./tools/verify-ledger-integrity.sh", "--help"],
-        capture_output=True,
-        text=True
+        ["./tools/verify-ledger-integrity.sh", "--help"], capture_output=True, text=True
     )
-    
+
     assert result.returncode == 0
     assert "verify-ledger-integrity.sh" in result.stdout
     assert "Usage:" in result.stdout
@@ -239,15 +249,91 @@ def test_verify_ledger_integrity_tenant_filter():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         tenant_id = create_test_database(db_path, num_events=5)
-        
+
         result = subprocess.run(
-            ["./tools/verify-ledger-integrity.sh", "--db", db_path, "--tenant", tenant_id, "--json"],
+            [
+                "./tools/verify-ledger-integrity.sh",
+                "--db",
+                db_path,
+                "--tenant",
+                tenant_id,
+                "--json",
+            ],
             capture_output=True,
-            text=True
+            text=True,
         )
-        
+
         assert result.returncode == 0
-        
+
         data = json.loads(result.stdout)
         assert data["valid"] is True
         assert data["total_events"] == 5
+
+
+def test_verify_ledger_integrity_engine_sqlite_explicit():
+    """Test that --engine sqlite works explicitly (same as default)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        create_test_database(db_path, num_events=5)
+
+        result = subprocess.run(
+            [
+                "./tools/verify-ledger-integrity.sh",
+                "--engine",
+                "sqlite",
+                "--db",
+                db_path,
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+
+        data = json.loads(result.stdout)
+        assert data["valid"] is True
+        assert data["total_events"] == 5
+
+
+def test_verify_ledger_integrity_engine_invalid():
+    """Test that an invalid --engine value exits with code 3."""
+    result = subprocess.run(
+        ["./tools/verify-ledger-integrity.sh", "--engine", "oracle"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 3
+
+
+def test_verify_ledger_integrity_postgres_missing_url():
+    """Test that --engine postgres without --pg-url exits with code 2."""
+    result = subprocess.run(
+        ["./tools/verify-ledger-integrity.sh", "--engine", "postgres"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PGURL": ""},
+    )
+    assert result.returncode == 2
+    assert "pg-url" in result.stderr.lower() or "PGURL" in result.stderr
+
+
+def test_production_db_setup_sql_exists():
+    """Test that deploy/production-db-setup.sql exists and contains audit_events."""
+    sql_path = "deploy/production-db-setup.sql"
+    assert os.path.isfile(sql_path), f"Missing: {sql_path}"
+
+    content = open(sql_path).read()
+    assert "CREATE TABLE IF NOT EXISTS audit_events" in content
+    assert "event_hash" in content
+    assert "prev_event_hash" in content
+
+
+def test_production_db_setup_sql_schema_version_header():
+    """Test that production-db-setup.sql has the required header block."""
+    sql_path = "deploy/production-db-setup.sql"
+    content = open(sql_path).read()
+
+    assert "Schema Version:" in content
+    assert "Compatibility:" in content
+    assert "Derived from:" in content
