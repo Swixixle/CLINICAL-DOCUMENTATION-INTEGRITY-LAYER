@@ -43,6 +43,9 @@ venv.bak/
 *.db
 *.db-journal
 
+# Tenant vault - contains private keys (DO NOT COMMIT)
+tenant_vault/
+
 # Phase 2-4 files (moved to separate PRs)
 *.backup
 *.old
