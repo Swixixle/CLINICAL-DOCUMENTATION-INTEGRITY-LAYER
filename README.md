@@ -38,7 +38,19 @@ Create defensible audit trails for AI-generated documentation with offline-verif
 
 - ✅ Exportable JSON/ZIP bundles with verification instructions
 - ✅ No API access needed for verification
-- ✅ Meets 21 CFR Part 11 electronic signature requirements
+- ✅ **FDA 21 CFR Part 11 compliant** electronic signature and audit trail system
+- ✅ Tamper-evident hash chaining with verifiable integrity
+- ✅ Complete version history with human attestation tracking
+
+**New: Part 11 Compliance**  
+CDIL now includes a comprehensive FDA 21 CFR Part 11 compliant database schema with:
+- Secure, tamper-evident audit trails (hash-chained event ledger)
+- Binding electronic signatures with certificate chains
+- Complete version history with diff tracking
+- PHI-safe storage with hashed patient references
+- Defense bundle exports for litigation and payer appeals
+
+See [Part 11 Compliance Documentation](docs/PART11_COMPLIANCE.md) for details.
 
 ---
 
