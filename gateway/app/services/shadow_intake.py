@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from gateway.app.db.migrate import get_db_path
-from gateway.app.services.uuid7 import uuid7_str
+from gateway.app.services.uuid7 import generate_uuid7
 from gateway.app.services.hashing import sha256_hex
 
 
@@ -47,7 +47,7 @@ def create_shadow_item(
         Dict with shadow_id, note_hash, timestamp, tenant_id, status
     """
     # Generate shadow_id using UUID7 (time-ordered)
-    shadow_id = uuid7_str()
+    shadow_id = generate_uuid7()
     
     # Hash the note text
     note_hash = sha256_hex(note_text.encode('utf-8'))
