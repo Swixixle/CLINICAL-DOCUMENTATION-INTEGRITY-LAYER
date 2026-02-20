@@ -29,6 +29,7 @@ def test_issue_certificate_minimal(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Patient presents with mild fever and cough. Assessment: likely viral URI. Plan: rest and fluids.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers = create_clinician_headers("hospital-alpha")
 
@@ -47,7 +48,7 @@ def test_issue_certificate_minimal(client):
     assert cert["note_hash"]  # Hash should exist
     assert len(cert["note_hash"]) == 64  # SHA-256 hex is 64 chars
     assert cert["patient_hash"] is None  # Not provided
-    assert cert["reviewer_hash"] is None  # Not provided
+    assert cert["reviewer_hash"] is not None  # Hashed from provided reviewer_id
 
     # Verify integrity chain
     assert "integrity_chain" in cert
@@ -110,6 +111,7 @@ def test_certificate_chain_linkage(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "First note for tenant gamma.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response1 = client.post(
@@ -126,6 +128,7 @@ def test_certificate_chain_linkage(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Second note for tenant gamma.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response2 = client.post(
@@ -152,6 +155,7 @@ def test_tenant_isolation(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tenant delta.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers_delta = create_clinician_headers("hospital-delta")
 
@@ -169,6 +173,7 @@ def test_tenant_isolation(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tenant epsilon.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers_epsilon = create_clinician_headers("hospital-epsilon")
 
@@ -199,6 +204,7 @@ def test_get_certificate(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Test note for retrieval.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers = create_clinician_headers("hospital-zeta")
 
@@ -237,6 +243,7 @@ def test_verify_certificate_valid(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for verification test.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers = create_clinician_headers("hospital-eta")
 
@@ -272,6 +279,7 @@ def test_verify_certificate_tampered(client):
         "governance_policy_version": "clinical-v1.0",
         "note_text": "Note for tampering test.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
     headers = create_clinician_headers("hospital-theta")
 

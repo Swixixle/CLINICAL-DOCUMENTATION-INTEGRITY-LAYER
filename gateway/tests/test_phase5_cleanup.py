@@ -111,11 +111,13 @@ def test_clinical_endpoint_provides_tenant_id():
 
         # Issue a certificate - this should work because clinical endpoint provides tenant_id
         request_data = {
+            "model_name": "gpt-4",
             "model_version": "gpt-4-turbo",
             "prompt_version": "clinical-v1.2",
             "governance_policy_version": "CDOC-Policy-v1",
             "note_text": "Test note content",
             "human_reviewed": True,
+            "human_reviewer_id": "test-reviewer-001",
             "encounter_id": "ENC-TEST",
         }
 

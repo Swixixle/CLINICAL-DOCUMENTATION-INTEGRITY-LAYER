@@ -15,3 +15,18 @@ import os
 # This happens during pytest's initial import phase, before test collection
 os.environ["ENV"] = "TEST"
 os.environ["DISABLE_RATE_LIMITS"] = "1"
+
+import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def setup_test_database():
+    """Ensure the database schema is created before any tests run.
+
+    TestClient in newer starlette versions does not run the app lifespan
+    unless used as a context manager. This fixture ensures the schema is
+    initialised once for the entire test session.
+    """
+    from gateway.app.db.migrate import ensure_schema
+
+    ensure_schema()
