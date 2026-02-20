@@ -46,10 +46,18 @@ venv.bak/
 # Tenant vault - contains private keys (DO NOT COMMIT)
 tenant_vault/
 
+.ruff_cache/
+.mypy_cache/
+
+# SQLite files
+*.sqlite
+*.sqlite3
+
 # Phase 2-4 files (moved to separate PRs)
 *.backup
 *.old
 *.phase2
+*.phase2-4
 *.phase3
 *.phase4
 *.reference

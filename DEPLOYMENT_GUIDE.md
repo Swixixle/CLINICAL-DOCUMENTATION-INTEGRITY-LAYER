@@ -176,10 +176,10 @@ chown cdil:cdil /data/eli_sentinel.db
 For production deployments with multiple instances, migrate to PostgreSQL:
 
 1. Export data from SQLite
-2. Update connection string
-3. Run migration scripts (future PR)
+2. Set `DATABASE_URL` to the PostgreSQL DSN (e.g. `postgresql+psycopg2://cdil:cdil@host:5432/cdil`)
+3. Run schema migrations: `alembic -c alembic.ini upgrade head`
 
-**Note:** PostgreSQL migration is not included in Phase 1. For now, use SQLite with proper backups.
+The Docker image includes Alembic and its migration scripts. Run migrations before starting the application.
 
 ---
 
