@@ -1,4 +1,4 @@
-"""Tests for verify-ledger-integrity.sh script."""
+"""Tests for verify-ledger-integrity.sh script and verify_ledger_integrity.py."""
 
 import os
 import subprocess
@@ -337,3 +337,230 @@ def test_production_db_setup_sql_schema_version_header():
     assert "Schema Version:" in content
     assert "Compatibility:" in content
     assert "Derived from:" in content
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for tools/verify_ledger_integrity.py (Python verifier)
+# ---------------------------------------------------------------------------
+
+
+def _make_sqlite_db(
+    db_path: str, num_events: int = 5, tenant_id: str = "t_test"
+) -> None:
+    """Create a SQLite test database using the canonical compute_event_hash."""
+    from gateway.app.db.ledger_hashing import compute_event_hash
+
+    import uuid
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE audit_events (
+            event_id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            occurred_at_utc TEXT NOT NULL,
+            actor_id TEXT,
+            object_type TEXT NOT NULL,
+            object_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            event_payload_json TEXT NOT NULL,
+            prev_event_hash TEXT,
+            event_hash TEXT NOT NULL
+        )
+    """)
+    prev_hash = None
+    for i in range(num_events):
+        event_id = str(uuid.uuid4())
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        obj_type, obj_id, action = "note", f"note_{i}", "create"
+        payload_json = json.dumps({"seq": i})
+        event_hash = compute_event_hash(
+            prev_hash, timestamp, obj_type, obj_id, action, payload_json
+        )
+        conn.execute(
+            "INSERT INTO audit_events VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                event_id,
+                tenant_id,
+                timestamp,
+                None,
+                obj_type,
+                obj_id,
+                action,
+                payload_json,
+                prev_hash,
+                event_hash,
+            ),
+        )
+        prev_hash = event_hash
+    conn.commit()
+    conn.close()
+
+
+def test_python_verifier_pass():
+    """Python verifier returns PASS for a valid chain."""
+    from tools.verify_ledger_integrity import verify
+
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "test.db")
+        _make_sqlite_db(db, num_events=5)
+        result = verify("sqlite", db, "")
+        assert result["status"] == "PASS"
+        assert result["valid"] is True
+        assert result["total_events"] == 5
+        assert result["verified_events"] == 5
+        assert result["failure"] is None
+        assert result["errors"] == []
+        assert result["engine"] == "sqlite"
+
+
+def test_python_verifier_tamper_fail():
+    """Python verifier returns FAIL with failure details when event is tampered."""
+    from tools.verify_ledger_integrity import verify
+
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "test.db")
+        _make_sqlite_db(db, num_events=5)
+
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "UPDATE audit_events SET event_payload_json = '{\"tampered\": true}' "
+            "WHERE object_id = 'note_2'"
+        )
+        conn.commit()
+        conn.close()
+
+        result = verify("sqlite", db, "")
+        assert result["status"] == "FAIL"
+        assert result["valid"] is False
+        assert result["failure"] is not None
+        assert "Hash mismatch" in result["failure"]["reason"]
+        assert result["failure"]["event_id"] is not None
+        assert isinstance(result["failure"]["index"], int)
+
+
+def test_python_verifier_chain_break_fail():
+    """Python verifier returns FAIL with failure details on chain break."""
+    from tools.verify_ledger_integrity import verify
+
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "test.db")
+        _make_sqlite_db(db, num_events=5)
+
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "UPDATE audit_events SET prev_event_hash = 'badhash' "
+            "WHERE object_id = 'note_3'"
+        )
+        conn.commit()
+        conn.close()
+
+        result = verify("sqlite", db, "")
+        assert result["status"] == "FAIL"
+        assert result["valid"] is False
+        assert result["failure"] is not None
+        assert result["failure"]["event_id"] is not None
+
+
+def test_python_verifier_empty_ledger():
+    """Python verifier returns PASS for an empty ledger."""
+    from tools.verify_ledger_integrity import verify
+
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "test.db")
+        _make_sqlite_db(db, num_events=0)
+        result = verify("sqlite", db, "")
+        assert result["status"] == "PASS"
+        assert result["total_events"] == 0
+        assert result["failure"] is None
+
+
+def test_python_verifier_json_output_fields():
+    """Python verifier JSON output contains all required fields."""
+    from tools.verify_ledger_integrity import verify
+
+    with tempfile.TemporaryDirectory() as d:
+        db = os.path.join(d, "test.db")
+        _make_sqlite_db(db, num_events=3)
+        result = verify("sqlite", db, "")
+
+    for field in (
+        "status",
+        "engine",
+        "total_events",
+        "verified_events",
+        "failure",
+        "errors",
+    ):
+        assert field in result, f"Missing required field: {field}"
+
+
+def test_python_verifier_cli_pass(tmp_path):
+    """Python verifier CLI exits 0 and outputs JSON for a valid chain."""
+    db = str(tmp_path / "test.db")
+    _make_sqlite_db(db, num_events=4)
+
+    result = subprocess.run(
+        [
+            "python3",
+            "tools/verify_ledger_integrity.py",
+            "--engine",
+            "sqlite",
+            "--db",
+            db,
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "PASS"
+    assert data["total_events"] == 4
+
+
+def test_python_verifier_cli_fail_tamper(tmp_path):
+    """Python verifier CLI exits 1 and failure field populated on tamper."""
+    db = str(tmp_path / "test.db")
+    _make_sqlite_db(db, num_events=4)
+
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "UPDATE audit_events SET event_payload_json = '{\"x\":1}' WHERE object_id='note_1'"
+    )
+    conn.commit()
+    conn.close()
+
+    result = subprocess.run(
+        [
+            "python3",
+            "tools/verify_ledger_integrity.py",
+            "--engine",
+            "sqlite",
+            "--db",
+            db,
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    data = json.loads(result.stdout)
+    assert data["status"] == "FAIL"
+    assert data["failure"] is not None
+    assert "Hash mismatch" in data["failure"]["reason"]
+    assert data["failure"]["event_id"] is not None
+
+
+def test_ledger_hashing_is_canonical_source():
+    """ledger_hashing.compute_event_hash must match part11_operations hash logic."""
+    from gateway.app.db.ledger_hashing import compute_event_hash, hash_content
+
+    prev = "abc"
+    ts = "2026-01-01T00:00:00Z"
+    ot, oid, act, pj = "note", "n1", "create", '{"k": "v"}'
+
+    # Canonical function
+    h1 = compute_event_hash(prev, ts, ot, oid, act, pj)
+    # Direct formula — must match identically
+    h2 = hash_content(f"{prev}{ts}{ot}{oid}{act}{pj}")
+    assert h1 == h2

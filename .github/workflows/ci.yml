@@ -143,8 +143,7 @@ jobs:
 
     - name: Run ledger integrity check against Postgres (seeded chain — PASS expected)
       run: |
-        chmod +x ./tools/verify-ledger-integrity.sh
-        ./tools/verify-ledger-integrity.sh --engine postgres --pg-url "$PGURL" --json
+        python tools/verify_ledger_integrity.py --engine postgres --pg-url "$PGURL" --json
       env:
         PGURL: postgresql://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
@@ -178,6 +177,105 @@ jobs:
         fi
         echo "Tamper detection confirmed: verifier correctly returned exit code 1."
       env:
+    - name: Seed deterministic audit event chain via canonical hash logic
+      run: |
+        python - <<'PYEOF'
+        import json
+        import sys
+        import os
+        import uuid
+        from datetime import datetime, timezone
+
+        sys.path.insert(0, os.environ["PYTHONPATH"])
+        from gateway.app.db.ledger_hashing import compute_event_hash
+
+        import psycopg2
+        pg_url = os.environ["PGURL"]
+        conn = psycopg2.connect(pg_url)
+        cur = conn.cursor()
+
+        # Insert a tenant required by the FK constraint
+        tenant_id = "ci-test-tenant-01"
+        cur.execute(
+            """
+            INSERT INTO tenants (tenant_id, name, created_at_utc, updated_at_utc, status)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (tenant_id) DO NOTHING
+            """,
+            (tenant_id, "CI Test Tenant", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "active"),
+        )
+
+        # Insert a chain of 5 audit events using the canonical hash
+        prev_hash = None
+        for i in range(5):
+            event_id = str(uuid.uuid4())
+            ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            obj_type, obj_id, action = "note", f"ci-note-{i}", "ci_create"
+            payload_json = json.dumps({"ci_seq": i})
+            event_hash = compute_event_hash(prev_hash, ts, obj_type, obj_id, action, payload_json)
+            cur.execute(
+                """
+                INSERT INTO audit_events
+                  (event_id, tenant_id, occurred_at_utc, actor_id,
+                   object_type, object_id, action, event_payload_json,
+                   prev_event_hash, event_hash)
+                VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, %s, %s)
+                """,
+                (event_id, tenant_id, ts, obj_type, obj_id, action, payload_json, prev_hash, event_hash),
+            )
+            prev_hash = event_hash
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Seeded 5 audit events with canonical hashes.")
+        PYEOF
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Verify seeded chain PASS
+      run: |
+        python tools/verify_ledger_integrity.py \
+          --engine postgres --pg-url "$PGURL" \
+          --tenant ci-test-tenant-01 --json | tee /tmp/verify_result.json
+        python - <<'PYEOF'
+        import json, sys
+        r = json.load(open("/tmp/verify_result.json"))
+        assert r["status"] == "PASS", f"Expected PASS, got: {r}"
+        assert r["total_events"] == 5, f"Expected 5 events, got: {r['total_events']}"
+        assert r["failure"] is None, f"Expected no failure, got: {r['failure']}"
+        print(f"PASS: {r['total_events']} events verified.")
+        PYEOF
+      env:
+        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Tamper one row and confirm verifier detects it (FAIL expected)
+      run: |
+        psql "$PG_URL" -c "
+          UPDATE audit_events
+          SET event_payload_json = '{\"tampered\": true}'
+          WHERE tenant_id = 'ci-test-tenant-01'
+          AND object_id = 'ci-note-2';
+        "
+        set +e
+        python tools/verify_ledger_integrity.py \
+          --engine postgres --pg-url "$PGURL" \
+          --tenant ci-test-tenant-01 --json > /tmp/tamper_result.json
+        EXIT_CODE=$?
+        set -e
+        python - <<'PYEOF'
+        import json, sys
+        r = json.load(open("/tmp/tamper_result.json"))
+        assert r["status"] == "FAIL", f"Expected FAIL after tamper, got: {r}"
+        assert r["failure"] is not None, "Expected failure details"
+        assert "Hash mismatch" in r["failure"]["reason"], f"Wrong reason: {r['failure']}"
+        print(f"PASS: Tamper correctly detected. Failure: {r['failure']}")
+        PYEOF
+        [ "$EXIT_CODE" -eq 1 ] || { echo "ERROR: expected exit 1, got $EXIT_CODE"; exit 1; }
+      env:
+        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
         PGURL: postgresql://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
 

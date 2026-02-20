@@ -15,6 +15,10 @@ set -euo pipefail
 # Delegates all hash logic to tools/verify_ledger_integrity.py which imports
 # the single-source canonical hashing from gateway/app/db/ledger_hashing.py.
 # JSON output is parsed with Python -- never with grep/sed/awk.
+# This script is a thin wrapper around tools/verify_ledger_integrity.py, which
+# imports the canonical hash logic from gateway/app/db/ledger_hashing.py — the
+# same module used by the production ledger writer.  There is exactly ONE place
+# in the codebase where event_hash canonicalization is defined.
 #
 # Usage:
 #   ./tools/verify-ledger-integrity.sh [OPTIONS]
@@ -43,6 +47,11 @@ set -euo pipefail
 #       --pg-url postgresql://cdil:cdil@localhost/cdil --tenant tenant_12345
 #
 ################################################################################
+
+# Locate the repository root so Python imports resolve regardless of cwd.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 # Default values
 ENGINE="sqlite"
@@ -138,6 +147,11 @@ PY_ARGS=(
 [[ -n "$PG_URL" ]]    && PY_ARGS+=(--pg-url "$PG_URL")
 [[ -n "$TENANT_ID" ]] && PY_ARGS+=(--tenant "$TENANT_ID")
 [[ $VERBOSE -eq 1 ]]  && PY_ARGS+=(--verbose)
+# Build Python verifier arguments
+PY_ARGS=("--engine" "$ENGINE" "--db" "$DB_PATH")
+[[ -n "$PG_URL" ]]    && PY_ARGS+=("--pg-url" "$PG_URL")
+[[ -n "$TENANT_ID" ]] && PY_ARGS+=("--tenant" "$TENANT_ID")
+[[ $VERBOSE -eq 1 ]]  && PY_ARGS+=("--verbose")
 
 # Verbose header (non-JSON mode only)
 if [[ $VERBOSE -eq 1 ]] && [[ $JSON_OUTPUT -eq 0 ]]; then
@@ -173,6 +187,34 @@ if [[ $JSON_OUTPUT -eq 1 ]]; then
     echo "$RESULT"
     exit "$PY_EXIT"
 fi
+# Execute Python verifier — always outputs JSON to stdout; verbose goes to stderr.
+# Disable set -e temporarily so non-zero exit from verifier doesn't kill the script.
+set +e
+RESULT=$(python3 "${SCRIPT_DIR}/verify_ledger_integrity.py" "${PY_ARGS[@]}")
+PY_EXIT=$?
+set -e
+
+if [[ $PY_EXIT -eq 2 ]]; then
+    echo -e "${RED}ERROR: Verification script exited with code ${PY_EXIT}${NC}" >&2
+    exit 2
+fi
+
+if [[ $JSON_OUTPUT -eq 1 ]]; then
+    echo "$RESULT"
+    VALID=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['valid'])")
+    if [[ "$VALID" == "True" ]]; then
+        exit 0
+    else
+        exit 1
+    fi
+else
+    # Human-readable output
+    VALID=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r['valid'])")
+    TOTAL=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('total_events', 0))")
+    VERIFIED=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('verified_events', 0))")
+    TENANT_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('tenant_count', 0))")
+    ERROR_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
+    GENERAL_ERROR=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); f=r.get('failure'); print(f['reason'] if f and 'Query error' in f.get('reason','') else '')")
 
 # --- Human-readable output (parsed via Python, never grep/sed/awk) ---
 
