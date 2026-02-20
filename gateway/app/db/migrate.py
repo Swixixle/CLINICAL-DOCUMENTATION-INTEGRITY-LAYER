@@ -118,7 +118,7 @@ def ensure_schema():
     alembic_command.upgrade(alembic_cfg, "head")
 
     # Apply SQLite-specific hardening after migrations.
-    if database_url.startswith("sqlite"):
+    if database_url.startswith("sqlite://"):
         db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         try:

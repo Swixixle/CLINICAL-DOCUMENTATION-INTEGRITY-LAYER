@@ -101,7 +101,9 @@ def _columns_postgres(cur: Any, table: str) -> Set[str]:
 # ---------------------------------------------------------------------------
 
 
-def _fetch_events_sqlite(db_path: str, tenant_id: Optional[str]) -> list:
+def _fetch_events_sqlite(
+    db_path: str, tenant_id: Optional[str]
+) -> list[Dict[str, Any]]:
     import sqlite3
 
     conn = sqlite3.connect(db_path)
@@ -140,7 +142,9 @@ def _fetch_events_sqlite(db_path: str, tenant_id: Optional[str]) -> list:
     return events
 
 
-def _fetch_events_postgres(pg_url: str, tenant_id: Optional[str]) -> list:
+def _fetch_events_postgres(
+    pg_url: str, tenant_id: Optional[str]
+) -> list[Dict[str, Any]]:
     try:
         import psycopg2
         import psycopg2.extras
@@ -191,7 +195,7 @@ def _fetch_events_postgres(pg_url: str, tenant_id: Optional[str]) -> list:
 
 def fetch_events(
     engine: str, db_path: str, pg_url: str, tenant_id: Optional[str]
-) -> list:
+) -> list[Dict[str, Any]]:
     if engine == "sqlite":
         return _fetch_events_sqlite(db_path, tenant_id)
     elif engine == "postgres":
@@ -260,8 +264,8 @@ def verify(
             "tenant_count": 0,
         }
 
-    tenant_chains: Dict[str, list] = {}
-    errors: list = []
+    tenant_chains: Dict[str, list[Dict[str, Any]]] = {}
+    errors: list[Dict[str, Any]] = []
     verified_count = 0
 
     for i, event in enumerate(events):
@@ -395,7 +399,7 @@ Exit codes:
     return parser
 
 
-def main(argv: list = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
