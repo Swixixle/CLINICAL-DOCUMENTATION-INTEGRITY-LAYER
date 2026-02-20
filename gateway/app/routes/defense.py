@@ -34,7 +34,7 @@ class SimulateAlterationRequest(BaseModel):
     certificate_id: str = Field(
         ..., description="Certificate ID to test tampering against"
     )
-    mutated_note_text: str = Field(
+    modified_note_text: str = Field(
         ..., description="Modified note text to simulate alteration"
     )
 
@@ -149,7 +149,7 @@ async def simulate_alteration(
         )
 
     # Step 3: Compute hash of modified note text
-    modified_hash = sha256_hex(request.mutated_note_text.encode("utf-8"))
+    modified_hash = sha256_hex(request.modified_note_text.encode("utf-8"))
 
     # Step 4: Check if hashes match (tamper detection)
     tamper_detected = original_hash != modified_hash

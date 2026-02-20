@@ -109,7 +109,7 @@ class TestDefenseSimulation:
             headers=headers,
             json={
                 "certificate_id": "nonexistent-cert-id",
-                "mutated_note_text": "Altered documentation text",
+                "modified_note_text": "Altered documentation text",
             },
         )
 
@@ -134,7 +134,7 @@ class TestDefenseSimulation:
             headers=headers,
             json={
                 "certificate_id": "test-cert-id",
-                "mutated_note_text": "Test alteration",
+                "modified_note_text": "Test alteration",
             },
         )
 
@@ -162,7 +162,7 @@ class TestDefenseSimulation:
         """Test that defense simulation requires authentication."""
         response = client.post(
             "/v1/defense/simulate-alteration",
-            json={"certificate_id": "test-id", "mutated_note_text": "Test"},
+            json={"certificate_id": "test-id", "modified_note_text": "Test"},
         )
 
         assert response.status_code == 401
