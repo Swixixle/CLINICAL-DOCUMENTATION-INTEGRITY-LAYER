@@ -38,6 +38,7 @@ class TestTenantIsolation:
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
             "human_reviewed": True,
+            "human_reviewer_id": "test-reviewer-001",
             "encounter_id": "enc-123",
         }
 
@@ -154,6 +155,7 @@ class TestRoleBasedAccessControl:
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
             "human_reviewed": True,
+            "human_reviewer_id": "test-reviewer-001",
         }
 
         response = client.post(
@@ -249,6 +251,7 @@ class TestSignatureIntegrity:
             "governance_policy_version": "policy-2024-01",
             "note_text": "Patient presented with symptoms.",
             "human_reviewed": True,
+            "human_reviewer_id": "test-reviewer-001",
         }
 
         response = client.post(

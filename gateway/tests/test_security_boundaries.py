@@ -68,6 +68,7 @@ def test_cross_tenant_read_isolation(client):
         "governance_policy_version": "clinical-v1",
         "note_text": "Patient presents with symptoms requiring evaluation.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
         "encounter_id": "ENC-ALPHA-001",
     }
 
@@ -440,6 +441,7 @@ def test_signature_verification_valid(client):
         "governance_policy_version": "v1",
         "note_text": "Test note for signature verification.",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(

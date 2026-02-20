@@ -54,6 +54,7 @@ def test_timing_integrity_backdating_detected(client):
         "governance_policy_version": "policy-v1",
         "note_text": "Test note for backdating detection",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(
@@ -137,6 +138,7 @@ def test_timing_integrity_valid_sequence(client):
         "governance_policy_version": "policy-v1",
         "note_text": "Test note for valid timing",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(
@@ -201,6 +203,7 @@ def test_timing_integrity_no_ehr_reference(client):
         "governance_policy_version": "policy-v1",
         "note_text": "Test note without EHR reference",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(
@@ -236,6 +239,7 @@ def test_certificate_includes_governance_fields(client):
         "governance_policy_version": "policy-v2.0",
         "note_text": "Test note for governance fields",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(

@@ -97,7 +97,7 @@ def test_evidence_bundle_json_structure(client):
     bundle = response.json()
 
     # Validate bundle structure
-    assert bundle["bundle_version"] == "1.0"
+    assert bundle["bundle_version"] == "2.0"
     assert "generated_at" in bundle
 
     # Validate metadata section
@@ -177,7 +177,7 @@ def test_evidence_bundle_canonical_message_included(client):
     canonical_msg = signature["canonical_message"]
     assert "certificate_id" in canonical_msg
     assert "tenant_id" in canonical_msg
-    assert "timestamp" in canonical_msg
+    assert "issued_at_utc" in canonical_msg
     assert "note_hash" in canonical_msg
     assert "chain_hash" in canonical_msg
     assert "nonce" in canonical_msg
@@ -285,14 +285,14 @@ def test_evidence_bundle_zip_includes_json_bundle(client):
         assert "certificate.pdf" in file_list
         assert "evidence_bundle.json" in file_list  # New file added
         assert "verification_report.json" in file_list
-        assert "README_VERIFICATION.txt" in file_list
+        assert "README.txt" in file_list
 
         # Read and validate evidence_bundle.json
         bundle_json = zipf.read("evidence_bundle.json").decode("utf-8")
         bundle = json.loads(bundle_json)
 
         # Validate structure
-        assert bundle["bundle_version"] == "1.0"
+        assert bundle["bundle_version"] == "2.0"
         assert "metadata" in bundle
         assert "certificate" in bundle
         assert bundle["metadata"]["certificate_id"] == certificate_id
@@ -308,7 +308,7 @@ def test_build_evidence_bundle_function(client):
     bundle = build_evidence_bundle(certificate, identity="tenant-direct-001")
 
     # Validate structure
-    assert bundle["bundle_version"] == "1.0"
+    assert bundle["bundle_version"] == "2.0"
     assert "generated_at" in bundle
     assert "metadata" in bundle
     assert "hashes" in bundle
