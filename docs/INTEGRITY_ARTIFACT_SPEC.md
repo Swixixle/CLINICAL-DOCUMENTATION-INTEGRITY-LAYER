@@ -87,6 +87,22 @@ The **canonical message** is the exact byte sequence that gets cryptographically
 - ✅ **ALWAYS** include nonce for replay protection
 - ✅ **ALWAYS** use server_timestamp (never client-supplied)
 
+### Indirectly Protected Fields
+
+These fields are **not** in the canonical message but are protected through a signed value:
+
+| Field | Protection Mechanism |
+|-------|---------------------|
+| `previous_hash` | Not in the canonical message, but is an input to `chain_hash`. Because `chain_hash` IS signed, any alteration of `previous_hash` breaks the signature. |
+
+### Fields NOT Signed
+
+| Field | Reason |
+|-------|--------|
+| `patient_hash` | Stored in `certificate.json` as a chain-of-custody reference, but not included in `canonical_message`. A post-issuance modification of `patient_hash` would not invalidate the signature. |
+| Plaintext note content | Never stored or transmitted; only `note_hash` is kept. |
+| Raw patient / reviewer identifiers | Never stored; only the caller-supplied hash is kept. |
+
 ---
 
 ## Certificate Schema
@@ -140,15 +156,22 @@ Full certificate structure including metadata, hashes, signatures, and integrity
     "algorithm": "ECDSA_SHA_256",
     "signature": "MEUCIQDabcd1234...base64...",
     "canonical_message": {
-      "certificate_id": "cert-019453c2...",
-      "tenant_id": "hospital-alpha",
-      "finalized_at": "2026-02-18T10:30:00Z",
-      "note_hash": "sha256:789012345678...",
-      "model_version": "gpt-4-turbo-2024-11",
-      "governance_policy_version": "CDOC-Policy-v1",
+      "certificate_id": "cert-019453c2-8f5a-7b2e-a123-456789abcdef",
       "chain_hash": "sha256:this-cert-chain-hash...",
+      "governance_policy_hash": "sha256:policy789...",
+      "governance_policy_version": "CDOC-Policy-v1",
+      "human_attested_at_utc": "2026-02-18T10:29:50Z",
+      "human_reviewed": true,
+      "human_reviewer_id_hash": "sha256:reviewer456...",
+      "issued_at_utc": "2026-02-18T10:30:00Z",
+      "key_id": "tenant-key-001",
+      "model_name": "GPT-4-Turbo",
+      "model_version": "gpt-4-turbo-2024-11",
       "nonce": "019453c2-8f5a-7b2e-a123-456789abcdef",
-      "server_timestamp": "2026-02-18T10:30:00Z"
+      "note_hash": "sha256:789012345678...",
+      "prompt_version": "clinical-v1.2",
+      "server_timestamp": "2026-02-18T10:30:00Z",
+      "tenant_id": "hospital-alpha"
     }
   }
 }
