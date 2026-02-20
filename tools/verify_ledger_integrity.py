@@ -12,7 +12,7 @@ Usage:
 Options:
     --engine sqlite|postgres   Database engine (default: sqlite)
     --db PATH                  Path to SQLite database
-    --pg-url URL               PostgreSQL connection URL (or set PGURL env var)
+    --pg-url URL               PostgreSQL connection URL (or set PG_URL / PGURL env var)
     --tenant ID                Verify only a specific tenant (default: all)
     --verbose                  Print event-by-event verification to stderr
     --json                     Output indented JSON to stdout
@@ -93,7 +93,7 @@ def _columns_postgres(cur: Any, table: str) -> Set[str]:
         "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
         (table,),
     )
-    return {row[0] for row in cur.fetchall()}
+    return {row["column_name"] for row in cur.fetchall()}
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +378,7 @@ Exit codes:
         "--pg-url",
         dest="pg_url",
         default="",
-        help="PostgreSQL connection URL (or set PGURL env var)",
+        help="PostgreSQL connection URL (or set PG_URL / PGURL env var)",
     )
     parser.add_argument(
         "--tenant",
@@ -405,7 +405,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     engine = args.engine
     db_path = args.db
-    pg_url = args.pg_url or os.environ.get("PGURL", "")
+    pg_url = (
+        args.pg_url
+        or os.environ.get("PG_URL")
+        or os.environ.get("PGURL")
+        or os.environ.get("DATABASE_URL")
+        or ""
+    )
     tenant_id = args.tenant or None
 
     # Validate configuration
@@ -416,7 +422,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif engine == "postgres":
         if not pg_url:
             sys.stderr.write(
-                "ERROR: Postgres engine requires --pg-url or PGURL env var.\n"
+                "ERROR: Postgres engine requires --pg-url or PG_URL (or PGURL) env var.\n"
             )
             return 2
 

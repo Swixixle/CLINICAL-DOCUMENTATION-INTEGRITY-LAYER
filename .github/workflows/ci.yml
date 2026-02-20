@@ -52,6 +52,10 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
+      DATABASE_URL: postgresql+psycopg2://cdil:cdil@localhost:5432/cdil
+
     services:
       postgres:
         image: postgres:15
@@ -81,19 +85,20 @@ jobs:
         pip install -r requirements.txt
         pip install psycopg2-binary
 
+    - name: Sanity check DB connection
+      run: |
+        psql "$PG_URL" -c "SELECT current_user, current_database();"
+
     - name: Apply Postgres schema via Alembic
       run: |
         alembic upgrade head
       env:
-        DATABASE_URL: postgresql+psycopg2://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
 
     - name: Verify schema objects exist
       run: |
         psql "$PG_URL" -c "\d audit_events" | grep -q event_hash
         echo "Schema verification: audit_events table with event_hash column confirmed."
-      env:
-        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
 
     - name: Seed deterministic audit event chain via canonical hash logic
       run: |
@@ -108,7 +113,9 @@ jobs:
         from gateway.app.db.ledger_hashing import compute_event_hash
 
         import psycopg2
-        pg_url = os.environ["PGURL"]
+        pg_url = os.environ.get("PG_URL") or os.environ.get("PGURL")
+        if not pg_url:
+            raise RuntimeError("Missing PG_URL (or PGURL) in environment")
         conn = psycopg2.connect(pg_url)
         cur = conn.cursor()
 
@@ -149,13 +156,12 @@ jobs:
         print("Seeded 5 audit events with canonical hashes.")
         PYEOF
       env:
-        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
 
     - name: Verify seeded chain PASS
       run: |
         python tools/verify_ledger_integrity.py \
-          --engine postgres --pg-url "$PGURL" \
+          --engine postgres --pg-url "$PG_URL" \
           --tenant ci-test-tenant-01 --json | tee /tmp/verify_result.json
         python - <<'PYEOF'
         import json, sys
@@ -166,7 +172,6 @@ jobs:
         print(f"PASS: {r['total_events']} events verified.")
         PYEOF
       env:
-        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
 
     - name: Tamper one row and confirm verifier detects it (FAIL expected)
@@ -179,7 +184,7 @@ jobs:
         "
         set +e
         python tools/verify_ledger_integrity.py \
-          --engine postgres --pg-url "$PGURL" \
+          --engine postgres --pg-url "$PG_URL" \
           --tenant ci-test-tenant-01 --json > /tmp/tamper_result.json
         EXIT_CODE=$?
         set -e
@@ -193,8 +198,6 @@ jobs:
         PYEOF
         [ "$EXIT_CODE" -eq 1 ] || { echo "ERROR: expected exit 1, got $EXIT_CODE"; exit 1; }
       env:
-        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
-        PGURL: postgresql://cdil:cdil@localhost:5432/cdil
         PYTHONPATH: ${{ github.workspace }}
 
   smoke-test-local:
