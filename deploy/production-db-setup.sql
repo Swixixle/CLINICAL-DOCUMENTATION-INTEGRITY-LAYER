@@ -1,16 +1,25 @@
 -- ============================================================================
--- Schema Version: 1.0.0
+-- Schema Version: 1.0.0  (Alembic baseline revision: a156fad5dac4)
 -- Date: 2026-02-19
 -- Compatibility: PostgreSQL 15+
--- Derived from: gateway/app/db/part11_schema.sql (SQLite source of truth)
 --
 -- Production Postgres Schema — Clinical Documentation Integrity Layer (CDIL)
 --
--- This schema is the Postgres equivalent of the SQLite Part 11 schema.
+-- IMPORTANT: Alembic is the authoritative source of truth for schema changes.
+-- This file is kept in sync with the Alembic baseline migration as a human-
+-- readable reference and a fallback for ops teams without Python tooling.
+-- For all production provisioning use:
+--
+--   export DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/cdil
+--   alembic upgrade head
+--
+-- To regenerate this file from the current Alembic head:
+--   alembic upgrade head --sql > deploy/production-db-setup.sql
+--
 -- Semantic equivalence is preserved: all column names, constraints, and
--- relationships match the SQLite source so that audit event hash chains
--- computed by gateway/app/db/part11_operations.py are portable between
--- SQLite (development/test) and Postgres (production).
+-- relationships match gateway/app/db/part11_schema.sql (SQLite source) so
+-- that audit event hash chains computed by gateway/app/db/part11_operations.py
+-- are portable between SQLite (development/test) and Postgres (production).
 --
 -- FDA 21 CFR Part 11 design principles retained:
 --   - Event sourcing (append-only audit_events)

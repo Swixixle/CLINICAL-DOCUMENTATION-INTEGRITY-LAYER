@@ -81,11 +81,12 @@ jobs:
         pip install -r requirements.txt
         pip install psycopg2-binary
 
-    - name: Apply Postgres schema
+    - name: Apply Postgres schema via Alembic
       run: |
-        psql "$PG_URL" -f deploy/production-db-setup.sql
+        alembic upgrade head
       env:
-        PG_URL: postgresql://cdil:cdil@localhost:5432/cdil
+        DATABASE_URL: postgresql+psycopg2://cdil:cdil@localhost:5432/cdil
+        PYTHONPATH: ${{ github.workspace }}
 
     - name: Verify schema objects exist
       run: |
