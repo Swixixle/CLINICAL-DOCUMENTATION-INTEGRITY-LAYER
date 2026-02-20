@@ -392,3 +392,143 @@ def test_defense_bundle_verification_report_included(client):
             or "human_friendly_report" in verify_report
             or "failures" in verify_report
         )
+
+
+def test_defense_bundle_schema_contract(client):
+    """
+    Bundle schema contract test: defense bundle ZIP must always contain
+    exactly the 5 required files specified in docs/BUNDLE_SPEC.md.
+
+    This test is the canonical lock against bundle schema drift.
+    Any change to the bundle contents must be intentional and reflected
+    in docs/BUNDLE_SPEC.md.
+    """
+    cert_response = issue_test_certificate(client, tenant_id="hospital-schema-contract")
+    cert_id = cert_response["certificate_id"]
+
+    headers = create_clinician_headers("hospital-schema-contract")
+    response = client.get(f"/v1/certificates/{cert_id}/defense-bundle", headers=headers)
+    assert response.status_code == 200
+
+    zip_buffer = BytesIO(response.content)
+    with zipfile.ZipFile(zip_buffer, "r") as zf:
+        file_list = set(zf.namelist())
+
+    # Exact file set per BUNDLE_SPEC.md — do not change without updating docs
+    expected_files = {
+        "certificate.json",
+        "canonical_message.json",
+        "verification_report.json",
+        "public_key.pem",
+        "README.txt",
+    }
+    assert file_list == expected_files, (
+        f"Bundle file list does not match BUNDLE_SPEC.md.\n"
+        f"Expected: {sorted(expected_files)}\n"
+        f"Got:      {sorted(file_list)}"
+    )
+
+
+def test_defense_bundle_public_key_is_valid_ec_pem(client):
+    """
+    public_key.pem in the defense bundle must be a valid EC P-256 public key.
+    It must load without error using the cryptography library.
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    cert_response = issue_test_certificate(client, tenant_id="hospital-ec-pem-test")
+    cert_id = cert_response["certificate_id"]
+
+    headers = create_clinician_headers("hospital-ec-pem-test")
+    response = client.get(f"/v1/certificates/{cert_id}/defense-bundle", headers=headers)
+    assert response.status_code == 200
+
+    zip_buffer = BytesIO(response.content)
+    with zipfile.ZipFile(zip_buffer, "r") as zf:
+        pem_data = zf.read("public_key.pem")
+
+    # Must load as a valid public key
+    public_key = serialization.load_pem_public_key(pem_data)
+
+    # Must be an EC key on P-256
+    assert isinstance(public_key, ec.EllipticCurvePublicKey)
+    assert isinstance(public_key.curve, ec.SECP256R1)
+
+
+def test_evidence_bundle_zip_contains_valid_ec_public_key():
+    """
+    Evidence bundle ZIP (legacy format) public_key.pem must contain a valid
+    EC P-256 public key — not a placeholder or error comment.
+
+    This is a regression test for the broken RSA extraction bug where
+    the EC key was never written because the code only handled RSA keys.
+    """
+    import tempfile
+    import shutil
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    import gateway.app.db.migrate as migrate_module
+
+    original_get_db_path = migrate_module.get_db_path
+    temp_dir = tempfile.mkdtemp()
+    temp_db_path = Path(temp_dir) / "test_ec_key.db"
+
+    migrate_module.get_db_path = lambda: temp_db_path
+    from gateway.app.db.migrate import ensure_schema
+    from gateway.app.services.storage import bootstrap_dev_keys
+
+    ensure_schema()
+    bootstrap_dev_keys()
+
+    try:
+        local_client = TestClient(app)
+
+        # Issue a certificate
+        cert_response = local_client.post(
+            "/v1/clinical/documentation",
+            json={
+                "model_name": "gpt-4",
+                "model_version": "v1",
+                "prompt_version": "v1",
+                "governance_policy_version": "v1",
+                "note_text": "EC key test note",
+                "human_reviewed": False,
+            },
+            headers=create_clinician_headers("hospital-ec-key-test"),
+        )
+        assert cert_response.status_code == 200
+        cert_id = cert_response.json()["certificate_id"]
+
+        # Fetch the evidence-bundle.zip
+        headers = create_clinician_headers("hospital-ec-key-test")
+        zip_response = local_client.get(
+            f"/v1/certificates/{cert_id}/evidence-bundle.zip",
+            headers=headers,
+        )
+        assert zip_response.status_code == 200
+
+        zip_buffer = BytesIO(zip_response.content)
+        with zipfile.ZipFile(zip_buffer, "r") as zf:
+            assert "public_key.pem" in zf.namelist(), (
+                "public_key.pem is missing from evidence-bundle.zip"
+            )
+            pem_data = zf.read("public_key.pem")
+
+        # Must not be a comment/error placeholder
+        pem_str = pem_data.decode("utf-8")
+        assert pem_str.strip().startswith("-----BEGIN PUBLIC KEY-----"), (
+            f"public_key.pem does not contain a valid PEM key: {pem_str[:100]}"
+        )
+
+        # Must load as a valid EC P-256 public key
+        public_key = serialization.load_pem_public_key(pem_data)
+        assert isinstance(public_key, ec.EllipticCurvePublicKey)
+        assert isinstance(public_key.curve, ec.SECP256R1)
+
+    finally:
+        migrate_module.get_db_path = original_get_db_path
+        shutil.rmtree(temp_dir, ignore_errors=True)
