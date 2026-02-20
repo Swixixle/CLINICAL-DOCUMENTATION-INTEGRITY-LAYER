@@ -70,11 +70,13 @@ def test_proof_1_tenant_spoof_rejected(client):
 
     # Attempt to issue certificate claiming to be tenant B
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v1.0",
         "governance_policy_version": "clinical-v1",
         "note_text": "Legitimate clinical note",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
         "encounter_id": "ENC-SPOOF-001",
     }
 
@@ -114,11 +116,13 @@ def test_proof_2_cross_tenant_forge_impossible(client):
     )
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
         "note_text": "Clinical note from tenant A",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response_a = client.post(
@@ -182,11 +186,13 @@ def test_proof_3_cross_tenant_read_blocked(client):
     )
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
         "note_text": "Private note for tenant A",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response_a = client.post(
@@ -266,11 +272,13 @@ def test_proof_4_key_rotation_preserves_old_certs(client):
 
     # Issue certificate with original key
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
         "note_text": "Pre-rotation certificate",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response_old = client.post(
@@ -305,11 +313,13 @@ def test_proof_4_key_rotation_preserves_old_certs(client):
 
     # Issue new certificate with rotated key
     request_data_new = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
         "note_text": "Post-rotation certificate",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response_new = client.post(
@@ -362,11 +372,13 @@ def test_proof_5_audit_pack_completeness(client):
     )
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4-clinical",
         "prompt_version": "v2.0",
         "governance_policy_version": "clinical-v2",
         "note_text": "Clinical documentation for audit",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
         "encounter_id": "ENC-AUDIT-001",
     }
 
@@ -434,6 +446,7 @@ def test_authentication_required_for_all_endpoints(client):
     """
     # Try to issue certificate without auth
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -465,11 +478,13 @@ def test_insufficient_role_rejected(client):
     )
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
         "note_text": "RBAC test note",
         "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-001",
     }
 
     response = client.post(
@@ -515,6 +530,7 @@ def test_expired_token_rejected(client):
     )
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
@@ -550,6 +566,7 @@ def test_malformed_token_rejected(client):
     malformed_token = "not.a.valid.jwt"
 
     request_data = {
+        "model_name": "gpt-4",
         "model_version": "gpt-4",
         "prompt_version": "v1.0",
         "governance_policy_version": "v1",
