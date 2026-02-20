@@ -5,20 +5,10 @@ set -euo pipefail
 # verify-ledger-integrity.sh
 #
 # Cryptographically verifies the integrity of the audit event ledger.
-# This script validates:
-#   1. Each audit event's hash matches its recomputed value
-#   2. The hash chain is intact (prev_event_hash linkage)
-#   3. No events have been tampered with or deleted
-#
-# This is a CRITICAL compliance tool for FDA 21 CFR Part 11 audit requirements.
-#
-# Delegates all hash logic to tools/verify_ledger_integrity.py which imports
-# the single-source canonical hashing from gateway/app/db/ledger_hashing.py.
-# JSON output is parsed with Python -- never with grep/sed/awk.
 # This script is a thin wrapper around tools/verify_ledger_integrity.py, which
-# imports the canonical hash logic from gateway/app/db/ledger_hashing.py — the
-# same module used by the production ledger writer.  There is exactly ONE place
-# in the codebase where event_hash canonicalization is defined.
+# imports the canonical hash logic from gateway/app/db/ledger_hashing.py.
+# There is exactly ONE place in the codebase where event_hash canonicalization
+# is defined.
 #
 # Usage:
 #   ./tools/verify-ledger-integrity.sh [OPTIONS]
@@ -26,7 +16,7 @@ set -euo pipefail
 # Options:
 #   --engine sqlite|postgres  Database engine (default: sqlite)
 #   --db PATH                 Path to SQLite database (default: gateway/app/data/part11.db)
-#   --pg-url URL              PostgreSQL connection URL (e.g. postgresql://user:pass@host/db)
+#   --pg-url URL              PostgreSQL connection URL
 #                             Alternatively set PGURL env var.
 #   --tenant ID               Verify only specific tenant (default: all tenants)
 #   --verbose                 Show detailed event-by-event verification
@@ -46,10 +36,11 @@ set -euo pipefail
 #   ./tools/verify-ledger-integrity.sh --engine postgres \
 #       --pg-url postgresql://cdil:cdil@localhost/cdil --tenant tenant_12345
 #
+# FDA 21 CFR Part 11 compliance verification tool.
 ################################################################################
 
 # Locate the repository root so Python imports resolve regardless of cwd.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
@@ -118,7 +109,6 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Locate the standalone Python verifier
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERIFIER="${SCRIPT_DIR}/verify_ledger_integrity.py"
 if [[ ! -f "$VERIFIER" ]]; then
     echo -e "${RED}ERROR: Verifier not found: ${VERIFIER}${NC}" >&2
@@ -139,14 +129,6 @@ elif [[ "$ENGINE" == "postgres" ]]; then
     fi
 fi
 
-# Build argument list for the Python verifier
-PY_ARGS=(
-    --engine "$ENGINE"
-    --db     "$DB_PATH"
-)
-[[ -n "$PG_URL" ]]    && PY_ARGS+=(--pg-url "$PG_URL")
-[[ -n "$TENANT_ID" ]] && PY_ARGS+=(--tenant "$TENANT_ID")
-[[ $VERBOSE -eq 1 ]]  && PY_ARGS+=(--verbose)
 # Build Python verifier arguments
 PY_ARGS=("--engine" "$ENGINE" "--db" "$DB_PATH")
 [[ -n "$PG_URL" ]]    && PY_ARGS+=("--pg-url" "$PG_URL")
@@ -155,9 +137,9 @@ PY_ARGS=("--engine" "$ENGINE" "--db" "$DB_PATH")
 
 # Verbose header (non-JSON mode only)
 if [[ $VERBOSE -eq 1 ]] && [[ $JSON_OUTPUT -eq 0 ]]; then
-    echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}================================================================${NC}"
     echo -e "${BLUE}   AUDIT LEDGER INTEGRITY VERIFICATION${NC}"
-    echo -e "${BLUE}════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}================================================================${NC}"
     echo -e "Engine:   ${ENGINE}"
     if [[ "$ENGINE" == "sqlite" ]]; then
         echo -e "Database: ${DB_PATH}"
@@ -169,17 +151,16 @@ if [[ $VERBOSE -eq 1 ]] && [[ $JSON_OUTPUT -eq 0 ]]; then
     else
         echo -e "Tenant:   All tenants"
     fi
-    echo -e "${BLUE}────────────────────────────────────────────────────────────────${NC}"
+    echo -e "${BLUE}----------------------------------------------------------------${NC}"
     echo ""
     echo "Verifying audit event chain..."
     echo ""
 fi
 
-# Execute the standalone Python verifier.
-# set -e is temporarily disabled because exit code 1 (FAIL) is expected.
-# stdout is captured; stderr (verbose events) flows through to caller.
+# Execute Python verifier -- always outputs JSON to stdout; verbose goes to stderr.
+# Disable set -e temporarily so non-zero exit from verifier does not kill the script.
 set +e
-RESULT=$(PYTHONPATH="${PYTHONPATH:-${SCRIPT_DIR}/..}" python3 "$VERIFIER" "${PY_ARGS[@]}")
+RESULT=$(python3 "${VERIFIER}" "${PY_ARGS[@]}")
 PY_EXIT=$?
 set -e
 
@@ -187,58 +168,29 @@ if [[ $JSON_OUTPUT -eq 1 ]]; then
     echo "$RESULT"
     exit "$PY_EXIT"
 fi
-# Execute Python verifier — always outputs JSON to stdout; verbose goes to stderr.
-# Disable set -e temporarily so non-zero exit from verifier doesn't kill the script.
-set +e
-RESULT=$(python3 "${SCRIPT_DIR}/verify_ledger_integrity.py" "${PY_ARGS[@]}")
-PY_EXIT=$?
-set -e
-
-if [[ $PY_EXIT -eq 2 ]]; then
-    echo -e "${RED}ERROR: Verification script exited with code ${PY_EXIT}${NC}" >&2
-    exit 2
-fi
-
-if [[ $JSON_OUTPUT -eq 1 ]]; then
-    echo "$RESULT"
-    VALID=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['valid'])")
-    if [[ "$VALID" == "True" ]]; then
-        exit 0
-    else
-        exit 1
-    fi
-else
-    # Human-readable output
-    VALID=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r['valid'])")
-    TOTAL=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('total_events', 0))")
-    VERIFIED=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('verified_events', 0))")
-    TENANT_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('tenant_count', 0))")
-    ERROR_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
-    GENERAL_ERROR=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); f=r.get('failure'); print(f['reason'] if f and 'Query error' in f.get('reason','') else '')")
-
-# --- Human-readable output (parsed via Python, never grep/sed/awk) ---
 
 # Exit code 2 = ERROR from the verifier
 if [[ $PY_EXIT -eq 2 ]]; then
     GENERAL_ERROR=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('error', 'Unknown error'))" 2>/dev/null || echo "$RESULT")
-    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}   ✗ VERIFICATION FAILED${NC}"
-    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}================================================================${NC}"
+    echo -e "${RED}   ERROR: VERIFICATION FAILED${NC}"
+    echo -e "${RED}================================================================${NC}"
     echo -e "Error: ${GENERAL_ERROR}"
     echo ""
     exit 2
 fi
 
-VALID=$(echo "$RESULT"       | python3 -c "import sys, json; r=json.load(sys.stdin); print(r['valid'])")
-TOTAL=$(echo "$RESULT"       | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('total_events', 0))")
-VERIFIED=$(echo "$RESULT"    | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('verified_events', 0))")
-TENANT_COUNT=$(echo "$RESULT"| python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('tenant_count', 0))")
-ERROR_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
+# Parse JSON for human-readable output
+VALID=$(echo "$RESULT"        | python3 -c "import sys, json; r=json.load(sys.stdin); print(r['valid'])")
+TOTAL=$(echo "$RESULT"        | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('total_events', 0))")
+VERIFIED=$(echo "$RESULT"     | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('verified_events', 0))")
+TENANT_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('tenant_count', 0))")
+ERROR_COUNT=$(echo "$RESULT"  | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
 
 if [[ "$VALID" == "True" ]]; then
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}   ✓ LEDGER INTEGRITY VERIFIED${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "${GREEN}   LEDGER INTEGRITY VERIFIED${NC}"
+    echo -e "${GREEN}================================================================${NC}"
     echo ""
     echo -e "Total Events:     ${GREEN}${TOTAL}${NC}"
     echo -e "Verified Events:  ${GREEN}${VERIFIED}${NC}"
@@ -251,16 +203,16 @@ if [[ "$VALID" == "True" ]]; then
     echo ""
     exit 0
 else
-    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}   ✗ LEDGER INTEGRITY VIOLATION DETECTED${NC}"
-    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}================================================================${NC}"
+    echo -e "${RED}   LEDGER INTEGRITY VIOLATION DETECTED${NC}"
+    echo -e "${RED}================================================================${NC}"
     echo ""
     echo -e "Total Events:     ${TOTAL}"
     echo -e "Verified Events:  ${VERIFIED}"
     echo -e "Tenants:          ${TENANT_COUNT}"
     echo -e "Errors Found:     ${RED}${ERROR_COUNT}${NC}"
     echo ""
-    echo -e "${RED}⚠ WARNING: The audit ledger has been compromised.${NC}"
+    echo -e "${RED}WARNING: The audit ledger has been compromised.${NC}"
     echo ""
     echo "Errors:"
     echo "$RESULT" | python3 -c "

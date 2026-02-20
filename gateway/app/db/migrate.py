@@ -1,7 +1,15 @@
 """
 Database migration utilities.
 
-Simple schema initialization for SQLite MVP with security hardening.
+Uses Alembic as the authoritative schema manager for both SQLite (dev/test)
+and PostgreSQL (production).  The raw schema.sql / part11_schema.sql files
+are retained as human-readable references only; the Alembic baseline migration
+is the single source of truth.
+
+DB path resolution:
+  1. DATABASE_URL env var  (full SQLAlchemy URL — used for Postgres)
+  2. CDIL_DB_PATH env var  (SQLite file path)
+  3. Default: /tmp/cdil.db (SQLite)
 """
 
 import sqlite3
@@ -14,18 +22,32 @@ def get_db_path() -> Path:
     """
     Get the path to the SQLite database file.
 
-    In production, this should be outside the repo and mounted from secure storage.
-    For MVP, we store in a data directory with restricted permissions.
+    Returns the path from CDIL_DB_PATH env var, or /tmp/cdil.db by default.
+    When DATABASE_URL is set (Postgres), this function is not used for
+    connections — use get_database_url() instead.
     """
-    # Check for environment variable first (production)
     db_path_env = os.getenv("CDIL_DB_PATH")
     if db_path_env:
         return Path(db_path_env)
 
-    # Default: store in gateway/app/db directory
-    db_dir = Path(__file__).parent
-    db_path = db_dir / "eli_sentinel.db"
-    return db_path
+    # Default to /tmp so the DB is never written inside the source tree.
+    return Path("/tmp/cdil.db")
+
+
+def get_database_url() -> str:
+    """
+    Return the SQLAlchemy database URL for Alembic / SQLAlchemy usage.
+
+    Priority:
+    1. DATABASE_URL environment variable (full URL, supports Postgres)
+    2. CDIL_DB_PATH as a SQLite file path
+    3. Default SQLite at /tmp/cdil.db
+    """
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return database_url
+
+    return f"sqlite:///{get_db_path()}"
 
 
 def ensure_db_permissions_secure(db_path: Path):
@@ -68,54 +90,51 @@ def enable_wal_mode(conn: sqlite3.Connection):
 
 def ensure_schema():
     """
-    Ensure database schema exists with security hardening.
+    Ensure the database schema is at the latest Alembic revision.
 
-    Creates tables if they don't exist.
-    Enables WAL mode for better concurrency.
-    Sets secure file permissions.
-    Idempotent - safe to call multiple times.
+    Runs ``alembic upgrade head`` programmatically so that both SQLite
+    (dev/test) and PostgreSQL (production) go through the same migration
+    path.  This replaces the old executescript(schema.sql) approach and
+    eliminates schema drift between environments.
+
+    For SQLite, WAL mode and secure file permissions are applied after
+    migrations run.
+
+    Idempotent — safe to call multiple times.
     """
-    db_path = get_db_path()
-    schema_path = Path(__file__).parent / "schema.sql"
-    part11_schema_path = Path(__file__).parent / "part11_schema.sql"
+    database_url = get_database_url()
 
-    # Read schemas
-    with open(schema_path, "r") as f:
-        schema_sql = f.read()
+    # Locate alembic.ini relative to the repo root.
+    # __file__ is gateway/app/db/migrate.py → repo root is 3 levels up.
+    repo_root = Path(__file__).parent.parent.parent.parent
+    alembic_ini = repo_root / "alembic.ini"
 
-    # Read Part 11 schema if it exists
-    part11_sql = ""
-    if part11_schema_path.exists():
-        with open(part11_schema_path, "r") as f:
-            part11_sql = f.read()
+    from alembic.config import Config
+    from alembic import command as alembic_command
 
-    # Execute schemas
-    conn = sqlite3.connect(db_path)
-    try:
-        # Enable WAL mode
-        enable_wal_mode(conn)
+    alembic_cfg = Config(str(alembic_ini))
+    alembic_cfg.set_main_option("sqlalchemy.url", database_url)
 
-        # Execute base schema
-        conn.executescript(schema_sql)
+    alembic_command.upgrade(alembic_cfg, "head")
 
-        # Execute Part 11 schema
-        if part11_sql:
-            conn.executescript(part11_sql)
-
-        conn.commit()
-    finally:
-        conn.close()
-
-    # Set secure file permissions
-    ensure_db_permissions_secure(db_path)
+    # Apply SQLite-specific hardening after migrations.
+    if database_url.startswith("sqlite://"):
+        db_path = get_db_path()
+        conn = sqlite3.connect(db_path)
+        try:
+            enable_wal_mode(conn)
+        finally:
+            conn.close()
+        ensure_db_permissions_secure(db_path)
 
 
 def get_connection() -> sqlite3.Connection:
     """
-    Get a database connection.
+    Get a SQLite database connection.
 
     Returns:
-        SQLite connection with Row factory enabled
+        SQLite connection with Row factory enabled.
+        Only valid when running against a SQLite backend.
     """
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
