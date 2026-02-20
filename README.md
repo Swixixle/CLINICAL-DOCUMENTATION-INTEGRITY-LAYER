@@ -2,6 +2,21 @@
 
 > Cryptographically signed integrity certificates for AI-generated clinical documentation — exportable as a tamper-evident defense bundle, offline-verifiable without API access.
 
+## System Scope (Authoritative Contract)
+
+This repository implements an AI integrity gateway producing:
+
+- HALO v1 tamper-evident chains
+- ECDSA P-256 signatures over canonical messages
+- Self-contained defense bundles
+- Offline CLI verification
+
+The authoritative contract is defined by OpenAPI (`/docs`) and the defense bundle schema in [`docs/BUNDLE_SPEC.md`](docs/BUNDLE_SPEC.md).
+
+Endpoints or workflows not present in the OpenAPI spec at `/docs` are not implemented.
+
+---
+
 ## What It Does
 
 - **Issue integrity certificates** for AI-generated clinical notes (ECDSA P-256 / SHA-256, ASN.1 DER signature)
@@ -110,10 +125,15 @@ See [`docs/TSA.md`](docs/TSA.md) for an explanation of what RFC 3161 provides an
 
 Full request/response details: [`docs/API.md`](docs/API.md)
 
-### Health
+Complete snapshot with auth requirements: [`docs/CONTRACT_SNAPSHOT.md`](docs/CONTRACT_SNAPSHOT.md)
+
+This list is derived verbatim from the OpenAPI spec at `/docs`.
+
+### Service
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
+| GET | `/` | None | Service root / liveness |
 | GET | `/healthz` | None | Simple liveness check |
 | GET | `/v1/health/status` | None | Detailed service status |
 
@@ -121,9 +141,9 @@ Full request/response details: [`docs/API.md`](docs/API.md)
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/v1/clinical/documentation` | JWT (clinician) | Issue integrity certificate |
+| POST | `/v1/clinical/documentation` | JWT | Issue integrity certificate |
 | GET | `/v1/certificates/{id}` | JWT | Retrieve certificate |
-| POST | `/v1/certificates/{id}/verify` | JWT (auditor) | Verify certificate integrity |
+| POST | `/v1/certificates/{id}/verify` | JWT | Verify certificate integrity |
 | POST | `/v1/certificates/query` | JWT | List / filter certificates |
 
 ### Evidence Export
@@ -135,11 +155,11 @@ Full request/response details: [`docs/API.md`](docs/API.md)
 | GET | `/v1/certificates/{id}/evidence-bundle.zip` | JWT | Evidence bundle (ZIP archive) |
 | GET | `/v1/certificates/{id}/pdf` | JWT | PDF certificate |
 
-### Ledger & Keys
+### Keys & Transactions
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/v1/certificates/query` | JWT | Browse transaction list with filters |
+| GET | `/v1/keys` | None | List public keys |
 | GET | `/v1/keys/{key_id}` | None | Retrieve public key for offline verification |
 | GET | `/v1/transactions/{id}` | None | Retrieve HALO accountability packet |
 | POST | `/v1/transactions/{id}/verify` | None | Verify HALO chain integrity |
@@ -149,6 +169,8 @@ Full request/response details: [`docs/API.md`](docs/API.md)
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/v1/shadow/intake` | JWT | Ingest note for PHI-safe shadow analysis |
+| GET | `/v1/shadow/items` | JWT | List shadow intake items |
+| GET | `/v1/shadow/items/{shadow_id}` | JWT | Retrieve shadow intake item by ID |
 | POST | `/v1/shadow/analyze` | JWT | Batch note analysis |
 | POST | `/v1/shadow/evidence-deficit` | JWT | MEAT scoring for a single note |
 | GET | `/v1/shadow/dashboard` | JWT | Denial risk dashboard |
@@ -162,6 +184,14 @@ Full request/response details: [`docs/API.md`](docs/API.md)
 | GET | `/v1/dashboard/risk-queue` | JWT | Prioritized high-risk note queue |
 | POST | `/v1/defense/simulate-alteration` | JWT | Demonstrate PASS then FAIL on tampered note |
 | GET | `/v1/defense/demo-scenario` | JWT | Pre-packaged tamper demo for presentations |
+
+### AI Gateway & Analytics
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/v1/ai/call` | None | AI call with HALO accountability packet |
+| POST | `/v1/mock/summarize` | None | Mock AI summarization (dev/test) |
+| POST | `/v2/analytics/roi-projection` | None | ROI projection (no PHI, stateless computation) |
 
 > **Note:** The `POST /v1/certificates/query` listing endpoint returns certificates scoped to the authenticated tenant. In production, ensure pagination limits are enforced. See [Roadmap](#roadmap).
 
@@ -286,6 +316,8 @@ PYTHONPATH=$PWD ENV=TEST DISABLE_RATE_LIMITS=1 pytest
 
 | Document | Description |
 |---|---|
+| [`docs/CONTRACT_SNAPSHOT.md`](docs/CONTRACT_SNAPSHOT.md) | Authoritative endpoint list (from OpenAPI) + defense bundle schema |
+| [`docs/BUNDLE_SPEC.md`](docs/BUNDLE_SPEC.md) | Formal defense bundle field-by-field specification |
 | [`docs/DEMO.md`](docs/DEMO.md) | 60-second demo: issue, verify, tamper, FAIL |
 | [`docs/API.md`](docs/API.md) | Full API reference with example payloads |
 | [`docs/TSA.md`](docs/TSA.md) | TSA design: mock vs real, RFC 3161, offline imprint check |
