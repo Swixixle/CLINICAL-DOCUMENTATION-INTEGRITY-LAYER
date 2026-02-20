@@ -336,7 +336,7 @@ def test_production_db_setup_sql_schema_version_header():
 
     assert "Schema Version:" in content
     assert "Compatibility:" in content
-    assert "Derived from:" in content
+    assert "alembic upgrade head" in content
 
 
 # ---------------------------------------------------------------------------
