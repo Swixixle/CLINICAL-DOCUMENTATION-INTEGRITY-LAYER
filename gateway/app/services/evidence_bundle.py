@@ -194,52 +194,54 @@ def generate_evidence_bundle(
 
         # Add public_key.pem (for offline verification with OpenSSL)
         key_id = certificate.get("signature", {}).get("key_id")
+        tenant_id = certificate.get("tenant_id")
         if key_id:
             try:
-                from gateway.app.services.storage import get_tenant_key_by_key_id
+                from gateway.app.services.key_registry import get_key_registry
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.primitives.asymmetric import ec
+                import base64
 
-                tenant_key = get_tenant_key_by_key_id(key_id)
-                if tenant_key and tenant_key.get("public_jwk_json"):
-                    # Convert JWK to PEM format
-                    import json as json_lib
-                    from cryptography.hazmat.primitives import serialization
-                    from cryptography.hazmat.primitives.asymmetric import rsa
-                    from cryptography.hazmat.backends import default_backend
+                jwk = None
+                # Try per-tenant key registry first (primary key store)
+                if tenant_id:
+                    registry = get_key_registry()
+                    key_data = registry.get_key_by_id(tenant_id, key_id)
+                    if key_data:
+                        jwk = key_data.get("public_jwk")
 
-                    jwk = json_lib.loads(tenant_key["public_jwk_json"])
+                # Fall back to legacy keys table
+                if jwk is None:
+                    from gateway.app.services.storage import get_key
+                    legacy_key = get_key(key_id)
+                    if legacy_key:
+                        jwk = legacy_key.get("jwk")
 
-                    # Extract RSA public key components from JWK
-                    if jwk.get("kty") == "RSA" and jwk.get("n") and jwk.get("e"):
-                        import base64
+                if jwk and jwk.get("kty") == "EC" and jwk.get("x") and jwk.get("y"):
+                    def decode_base64url(data):
+                        padding = 4 - (len(data) % 4)
+                        if padding != 4:
+                            data += "=" * padding
+                        return base64.urlsafe_b64decode(data)
 
-                        # Decode base64url encoded values with proper padding
-                        def decode_base64url(data):
-                            """Decode base64url with automatic padding."""
-                            # Add padding if needed
-                            padding = 4 - (len(data) % 4)
-                            if padding != 4:
-                                data += "=" * padding
-                            return base64.urlsafe_b64decode(data)
+                    x = int.from_bytes(decode_base64url(jwk["x"]), byteorder="big")
+                    y = int.from_bytes(decode_base64url(jwk["y"]), byteorder="big")
 
-                        # Decode components
-                        n_bytes = decode_base64url(jwk["n"])
-                        e_bytes = decode_base64url(jwk["e"])
+                    public_numbers = ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1())
+                    public_key = public_numbers.public_key()
 
-                        # Convert to integers
-                        n = int.from_bytes(n_bytes, byteorder="big")
-                        e = int.from_bytes(e_bytes, byteorder="big")
+                    pem_bytes = public_key.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                    )
 
-                        # Create RSA public key
-                        public_numbers = rsa.RSAPublicNumbers(e, n)
-                        public_key = public_numbers.public_key(default_backend())
-
-                        # Serialize to PEM
-                        pem_bytes = public_key.public_key_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                        )
-
-                        zipf.writestr("public_key.pem", pem_bytes.decode("utf-8"))
+                    zipf.writestr("public_key.pem", pem_bytes.decode("utf-8"))
+                else:
+                    kty = jwk.get("kty") if jwk else "unknown"
+                    zipf.writestr(
+                        "public_key.pem",
+                        f"# Unsupported key type: {kty}\n# Retrieve from /v1/keys/{key_id}",
+                    )
             except Exception as e:
                 # If public key extraction fails, add a note
                 zipf.writestr(

@@ -39,6 +39,14 @@ jobs:
       run: |
         black --check gateway
     
+    - name: Check OpenAPI drift against CONTRACT_SNAPSHOT.md
+      run: |
+        python tools/check_openapi_drift.py
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+        ENV: TEST
+        DISABLE_RATE_LIMITS: "1"
+
     - name: Run tests
       run: |
         pytest -q
