@@ -1,3 +1,14 @@
+> **ARCHIVED / NOT CURRENT**
+>
+> This file is preserved for historical reference only. It describes the
+> legacy ELI Sentinel project which predates the current CDIL (Clinical
+> Documentation Integrity Layer) repository. The content here does **not**
+> reflect the current architecture, APIs, or compliance posture of this repo.
+>
+> See the root [README.md](../../README.md) for current documentation.
+
+---
+
 
 
 ---

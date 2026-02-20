@@ -11,6 +11,10 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from gateway.app.db.ledger_hashing import (
+    hash_content,
+    compute_event_hash,
+)
 from gateway.app.db.ledger_hashing import compute_event_hash, hash_content  # noqa: F401
 
 
@@ -501,6 +505,7 @@ def create_audit_event(
     row = cursor.fetchone()
     prev_event_hash = row[0] if row else None
 
+    # Compute this event's hash via the shared canonical function
     # Compute this event's hash
     event_hash = compute_event_hash(
         prev_event_hash, timestamp, object_type, object_id, action, payload_json
@@ -591,6 +596,7 @@ def verify_audit_chain(conn: sqlite3.Connection, tenant_id: str) -> Dict[str, An
             event_hash,
         ) = event
 
+        # Recompute hash via shared canonical function
         # Recompute hash using canonical function
         computed_hash = compute_event_hash(
             prev_hash, timestamp, obj_type, obj_id, action, payload_json

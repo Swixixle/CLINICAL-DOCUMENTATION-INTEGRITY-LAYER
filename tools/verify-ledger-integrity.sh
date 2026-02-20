@@ -12,6 +12,9 @@ set -euo pipefail
 #
 # This is a CRITICAL compliance tool for FDA 21 CFR Part 11 audit requirements.
 #
+# Delegates all hash logic to tools/verify_ledger_integrity.py which imports
+# the single-source canonical hashing from gateway/app/db/ledger_hashing.py.
+# JSON output is parsed with Python -- never with grep/sed/awk.
 # This script is a thin wrapper around tools/verify_ledger_integrity.py, which
 # imports the canonical hash logic from gateway/app/db/ledger_hashing.py — the
 # same module used by the production ledger writer.  There is exactly ONE place
@@ -114,6 +117,14 @@ if ! command -v python3 &> /dev/null; then
     exit 2
 fi
 
+# Locate the standalone Python verifier
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERIFIER="${SCRIPT_DIR}/verify_ledger_integrity.py"
+if [[ ! -f "$VERIFIER" ]]; then
+    echo -e "${RED}ERROR: Verifier not found: ${VERIFIER}${NC}" >&2
+    exit 2
+fi
+
 # Validate engine-specific requirements
 if [[ "$ENGINE" == "sqlite" ]]; then
     if [[ ! -f "$DB_PATH" ]]; then
@@ -128,6 +139,14 @@ elif [[ "$ENGINE" == "postgres" ]]; then
     fi
 fi
 
+# Build argument list for the Python verifier
+PY_ARGS=(
+    --engine "$ENGINE"
+    --db     "$DB_PATH"
+)
+[[ -n "$PG_URL" ]]    && PY_ARGS+=(--pg-url "$PG_URL")
+[[ -n "$TENANT_ID" ]] && PY_ARGS+=(--tenant "$TENANT_ID")
+[[ $VERBOSE -eq 1 ]]  && PY_ARGS+=(--verbose)
 # Build Python verifier arguments
 PY_ARGS=("--engine" "$ENGINE" "--db" "$DB_PATH")
 [[ -n "$PG_URL" ]]    && PY_ARGS+=("--pg-url" "$PG_URL")
@@ -156,6 +175,18 @@ if [[ $VERBOSE -eq 1 ]] && [[ $JSON_OUTPUT -eq 0 ]]; then
     echo ""
 fi
 
+# Execute the standalone Python verifier.
+# set -e is temporarily disabled because exit code 1 (FAIL) is expected.
+# stdout is captured; stderr (verbose events) flows through to caller.
+set +e
+RESULT=$(PYTHONPATH="${PYTHONPATH:-${SCRIPT_DIR}/..}" python3 "$VERIFIER" "${PY_ARGS[@]}")
+PY_EXIT=$?
+set -e
+
+if [[ $JSON_OUTPUT -eq 1 ]]; then
+    echo "$RESULT"
+    exit "$PY_EXIT"
+fi
 # Execute Python verifier — always outputs JSON to stdout; verbose goes to stderr.
 # Disable set -e temporarily so non-zero exit from verifier doesn't kill the script.
 set +e
@@ -185,61 +216,70 @@ else
     ERROR_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
     GENERAL_ERROR=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); f=r.get('failure'); print(f['reason'] if f and 'Query error' in f.get('reason','') else '')")
 
-    if [[ -n "$GENERAL_ERROR" && "$GENERAL_ERROR" != "None" ]]; then
-        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${RED}   ✗ VERIFICATION FAILED${NC}"
-        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "Error: ${GENERAL_ERROR}"
-        echo ""
-        exit 2
-    fi
+# --- Human-readable output (parsed via Python, never grep/sed/awk) ---
 
-    if [[ "$VALID" == "True" ]]; then
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}   ✓ LEDGER INTEGRITY VERIFIED${NC}"
-        echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
-        echo -e "Total Events:     ${GREEN}${TOTAL}${NC}"
-        echo -e "Verified Events:  ${GREEN}${VERIFIED}${NC}"
-        echo -e "Tenants:          ${GREEN}${TENANT_COUNT}${NC}"
-        echo -e "Integrity Status: ${GREEN}INTACT${NC}"
-        echo ""
-        echo -e "${GREEN}No tampering detected. All audit events are cryptographically valid.${NC}"
-        echo ""
-        echo -e "This ledger is defensible for regulatory audit."
-        echo ""
-        exit 0
-    else
-        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${RED}   ✗ LEDGER INTEGRITY VIOLATION DETECTED${NC}"
-        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-        echo ""
-        echo -e "Total Events:     ${TOTAL}"
-        echo -e "Verified Events:  ${VERIFIED}"
-        echo -e "Tenants:          ${TENANT_COUNT}"
-        echo -e "Errors Found:     ${RED}${ERROR_COUNT}${NC}"
-        echo ""
-        echo -e "${RED}⚠ WARNING: The audit ledger has been compromised.${NC}"
-        echo ""
-        echo "Errors:"
-        echo "$RESULT" | python3 -c "
+# Exit code 2 = ERROR from the verifier
+if [[ $PY_EXIT -eq 2 ]]; then
+    GENERAL_ERROR=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('error', 'Unknown error'))" 2>/dev/null || echo "$RESULT")
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}   ✗ VERIFICATION FAILED${NC}"
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "Error: ${GENERAL_ERROR}"
+    echo ""
+    exit 2
+fi
+
+VALID=$(echo "$RESULT"       | python3 -c "import sys, json; r=json.load(sys.stdin); print(r['valid'])")
+TOTAL=$(echo "$RESULT"       | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('total_events', 0))")
+VERIFIED=$(echo "$RESULT"    | python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('verified_events', 0))")
+TENANT_COUNT=$(echo "$RESULT"| python3 -c "import sys, json; r=json.load(sys.stdin); print(r.get('tenant_count', 0))")
+ERROR_COUNT=$(echo "$RESULT" | python3 -c "import sys, json; r=json.load(sys.stdin); print(len(r.get('errors', [])))")
+
+if [[ "$VALID" == "True" ]]; then
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}   ✓ LEDGER INTEGRITY VERIFIED${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "Total Events:     ${GREEN}${TOTAL}${NC}"
+    echo -e "Verified Events:  ${GREEN}${VERIFIED}${NC}"
+    echo -e "Tenants:          ${GREEN}${TENANT_COUNT}${NC}"
+    echo -e "Integrity Status: ${GREEN}INTACT${NC}"
+    echo ""
+    echo -e "${GREEN}No tampering detected. All audit events are cryptographically valid.${NC}"
+    echo ""
+    echo -e "This ledger is defensible for regulatory audit."
+    echo ""
+    exit 0
+else
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}   ✗ LEDGER INTEGRITY VIOLATION DETECTED${NC}"
+    echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "Total Events:     ${TOTAL}"
+    echo -e "Verified Events:  ${VERIFIED}"
+    echo -e "Tenants:          ${TENANT_COUNT}"
+    echo -e "Errors Found:     ${RED}${ERROR_COUNT}${NC}"
+    echo ""
+    echo -e "${RED}⚠ WARNING: The audit ledger has been compromised.${NC}"
+    echo ""
+    echo "Errors:"
+    echo "$RESULT" | python3 -c "
 import sys, json
 r = json.load(sys.stdin)
 for i, err in enumerate(r.get('errors', []), 1):
-    print(f\"  {i}. Event: {err.get('event_id', 'unknown')[:16]}...\")
-    print(f\"     Error: {err.get('error', 'unknown error')}\")
+    print(f'  {i}. Event: {err.get(\"event_id\", \"unknown\")[:16]}...')
+    print(f'     Error: {err.get(\"error\", \"unknown error\")}')
     if 'timestamp' in err:
-        print(f\"     Time: {err['timestamp']}\")
+        print(f'     Time: {err[\"timestamp\"]}')
     print()
 "
-        echo ""
-        echo -e "${YELLOW}RECOMMENDED ACTIONS:${NC}"
-        echo "  1. Immediately secure the database and investigate unauthorized access"
-        echo "  2. Review system access logs for the timeframes of compromised events"
-        echo "  3. Notify your compliance officer and security team"
-        echo "  4. Restore from the last verified backup if available"
-        echo "  5. Document this incident per your breach response procedures"
-        echo ""
-        exit 1
-    fi
+    echo ""
+    echo -e "${YELLOW}RECOMMENDED ACTIONS:${NC}"
+    echo "  1. Immediately secure the database and investigate unauthorized access"
+    echo "  2. Review system access logs for the timeframes of compromised events"
+    echo "  3. Notify your compliance officer and security team"
+    echo "  4. Restore from the last verified backup if available"
+    echo "  5. Document this incident per your breach response procedures"
+    echo ""
+    exit 1
 fi
