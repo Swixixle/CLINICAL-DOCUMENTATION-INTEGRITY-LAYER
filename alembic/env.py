@@ -21,6 +21,10 @@ from sqlalchemy import create_engine, pool
 # Alembic Config object provides access to alembic.ini values.
 config = context.config
 
+# Never clear script_location; only set it if programmatic usage left it unset.
+if not config.get_main_option("script_location", default=None):
+    config.set_main_option("script_location", "alembic")
+
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
