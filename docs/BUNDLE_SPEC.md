@@ -91,39 +91,48 @@ The SHA-256 of the canonical bytes is what the ECDSA signature covers.
 
 ### Signed Fields
 
-All fields below are present in `canonical_message.json` and covered by the ECDSA signature.
-Source: `gateway/app/routes/clinical.py` (message construction) and `gateway/app/services/signer.py` (enhanced fields).
+> **The canonical message is the sole source of cryptographic truth.** Only fields present in `canonical_message.json` are covered by the ECDSA signature.
+> Source: [`gateway/app/routes/clinical.py`](../gateway/app/routes/clinical.py) and [`gateway/app/services/signer.py`](../gateway/app/services/signer.py).
 
-| Field | Source | Description |
-|---|---|---|
-| `certificate_id` | caller | Certificate identifier |
-| `chain_hash` | server | This block's chain hash (incorporates `previous_hash`; prevents chain forgery) |
-| `governance_policy_hash` | caller | SHA-256 of the governance policy version string |
-| `governance_policy_version` | caller | Governance policy version label |
-| `human_attested_at_utc` | server | Human attestation timestamp (null if not reviewed) |
-| `human_reviewed` | caller | Human review flag |
-| `human_reviewer_id_hash` | caller | SHA-256 of reviewer identifier (null if not reviewed) |
-| `issued_at_utc` | server | Issuance timestamp (server clock; client cannot forge) |
-| `key_id` | signer | Signing key identifier (added by `sign_generic_message`) |
-| `model_name` | caller | AI model name (e.g. `gpt-4`) |
-| `model_version` | caller | AI model version label |
-| `nonce` | signer | UUID7 nonce for replay protection (added by `sign_generic_message`) |
-| `note_hash` | server | SHA-256 of clinical note content |
-| `prompt_version` | caller | Prompt template version label |
-| `server_timestamp` | signer | Server-controlled timestamp added by `sign_generic_message` |
-| `tenant_id` | server | Issuing tenant identifier |
+| Field | Description |
+|---|---|
+| `certificate_id` | Certificate identifier |
+| `chain_hash` | This block's chain hash (prevents chain forgery; also indirectly protects `previous_hash`) |
+| `governance_policy_hash` | Policy version hash (binds issuance to a policy snapshot) |
+| `governance_policy_version` | Policy version label |
+| `human_attested_at_utc` | Human attestation timestamp (null if not reviewed) |
+| `human_reviewed` | Human review flag |
+| `human_reviewer_id_hash` | Reviewer identity hash (null if not reviewed) |
+| `issued_at_utc` | Issuance timestamp |
+| `key_id` | Signing key identifier (added by signer at signing time) |
+| `model_name` | AI model name |
+| `model_version` | Model label |
+| `nonce` | UUID7 replay-protection token (added by signer at signing time) |
+| `note_hash` | Hash of the clinical note content |
+| `prompt_version` | Prompt template version label |
+| `server_timestamp` | Server-controlled timestamp (added by signer at signing time) |
+| `tenant_id` | Issuing tenant identifier |
+
+### Indirectly Protected Fields
+
+These fields are **not signed directly**, but tampering with them would break a signed value:
+
+| Field | Protection Mechanism |
+|---|---|
+| `previous_hash` | Not in the canonical message, but included in computing `chain_hash` (which IS signed). Altering `previous_hash` changes `chain_hash`, which breaks the ECDSA signature. |
 
 ### Fields NOT Signed
 
 | Field | Reason |
 |---|---|
-| `patient_hash` | Present in `certificate.json` but **not** in `canonical_message.json`; not covered by signature |
-| `previous_hash` | Stored in `integrity_chain` but **not** directly in canonical message; indirectly protected because `chain_hash` (which is signed) is computed from it |
+| `patient_hash` | Not included in `canonical_message.json`; see the note below |
 | Plaintext note content | Never stored or transmitted; only the hash is kept |
 | Raw patient identifiers | Never stored; only the caller-supplied hash is kept |
 | `verification_report.json` | Generated at bundle-download time; reflects state at that moment |
 | `public_key.pem` | The key is identified by `key_id` in the signed message |
-| `README.txt` | Informational only; not part of the signed record |
+| `README.txt` | Bundle metadata only |
+
+> **Important — `patient_hash` scope:** `patient_hash` is stored in `certificate.json` as a chain-of-custody reference but is **not** included in the ECDSA-signed canonical message. A post-issuance modification of `patient_hash` would not invalidate the signature. Relying parties that require cryptographic binding of patient identity to the certificate must include `patient_hash` in their own attestation layer or require it to be added to the canonical message.
 
 ---
 
@@ -158,24 +167,21 @@ Snapshot of the verification result captured at bundle-download time.
 
 ## What Is Signed vs. What Is NOT Signed
 
+> **The canonical message is the sole source of cryptographic truth.** Only fields present in `canonical_message.json` are covered by the ECDSA signature; everything else is bundle metadata or certificate context.
+
+See the complete, authoritative breakdown in the [canonical_message.json field tables](#signed-fields) above. In summary:
+
 ### Signed (covered by ECDSA signature)
 
-- Note content hash (`note_hash`)
-- Model name and version (`model_name`, `model_version`)
-- Governance policy hash and version (`governance_policy_hash`, `governance_policy_version`)
-- Human review flag and reviewer hash (`human_reviewed`, `human_reviewer_id_hash`)
-- Human attestation timestamp (`human_attested_at_utc`)
-- Certificate ID and issuance timestamp (`certificate_id`, `issued_at_utc`)
-- HALO chain hash (`chain_hash`)
-- Tenant identifier (`tenant_id`)
-- Signing key identifier (`key_id`)
-- Prompt version (`prompt_version`)
-- Replay-protection nonce and server timestamp (`nonce`, `server_timestamp`)
+All 16 fields in `canonical_message.json`: `certificate_id`, `chain_hash`, `governance_policy_hash`, `governance_policy_version`, `human_attested_at_utc`, `human_reviewed`, `human_reviewer_id_hash`, `issued_at_utc`, `key_id`, `model_name`, `model_version`, `nonce`, `note_hash`, `prompt_version`, `server_timestamp`, `tenant_id`.
+
+### Indirectly Protected
+
+- `previous_hash` — not in the canonical message, but included in computing `chain_hash` (which IS signed). See [Indirectly Protected Fields](#indirectly-protected-fields).
 
 ### NOT Signed
 
-- `patient_hash` — present in `certificate.json` but not in the canonical message; not covered by the signature
-- `previous_hash` — stored in `integrity_chain` but not directly in the canonical message; indirectly protected because `chain_hash` is computed from it
+- `patient_hash` (not in `canonical_message.json` — see [Fields NOT Signed](#fields-not-signed) and the scope note)
 - The verification report (generated at bundle-download time, not at issuance)
 - The public key PEM (the key is identified by `key_id` in the signed message)
 - The `README.txt` in the bundle

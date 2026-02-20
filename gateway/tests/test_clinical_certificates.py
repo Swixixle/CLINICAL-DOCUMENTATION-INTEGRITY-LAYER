@@ -390,3 +390,98 @@ def test_no_plaintext_phi_in_storage(client):
     assert cert_dict["note_hash"]
     assert cert_dict["reviewer_hash"]
     assert cert_dict["patient_hash"]
+
+
+def test_canonical_message_signed_fields_contract(client):
+    """
+    Verify the canonical_message.json contract:
+    - patient_hash is NOT in the canonical message (not directly signed)
+    - previous_hash is NOT in the canonical message (indirectly protected via chain_hash)
+    - all expected signed fields ARE present
+    - chain_hash IS signed (which indirectly protects previous_hash)
+    - no unexpected extra fields are present
+    """
+    import json
+    from gateway.app.db.migrate import get_connection
+
+    request = {
+        "model_name": "gpt-4",
+        "model_version": "gpt-4-clinical-v1",
+        "prompt_version": "soap-note-v1.0",
+        "governance_policy_version": "clinical-v1.0",
+        "note_text": "Note for canonical message contract test.",
+        "human_reviewed": True,
+        "human_reviewer_id": "test-reviewer-contract",
+        "patient_reference": "MRN-contract-test-999",
+    }
+    headers = create_clinician_headers("hospital-contract-test")
+
+    response = client.post("/v1/clinical/documentation", json=request, headers=headers)
+    assert response.status_code == 200
+
+    certificate_id = response.json()["certificate_id"]
+
+    # Retrieve the full stored certificate (includes canonical_message)
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "SELECT certificate_json FROM certificates WHERE certificate_id = ?",
+            (certificate_id,),
+        )
+        row = cursor.fetchone()
+        cert_dict = json.loads(row["certificate_json"])
+    finally:
+        conn.close()
+
+    canonical_message = cert_dict["signature"]["canonical_message"]
+
+    # patient_hash is stored in the certificate but MUST NOT be in canonical_message
+    assert cert_dict["patient_hash"] is not None, (
+        "patient_hash should be in the certificate"
+    )
+    assert "patient_hash" not in canonical_message, (
+        "patient_hash must NOT be in canonical_message (it is not directly signed)"
+    )
+
+    # previous_hash is in integrity_chain but MUST NOT be directly in canonical_message;
+    # it is indirectly protected: previous_hash feeds into chain_hash, which IS signed
+    assert "previous_hash" not in canonical_message, (
+        "previous_hash must NOT be directly in canonical_message; "
+        "it is indirectly protected via chain_hash"
+    )
+
+    # chain_hash MUST be signed (it is what protects previous_hash indirectly)
+    assert "chain_hash" in canonical_message, (
+        "chain_hash must be in canonical_message (it indirectly protects previous_hash)"
+    )
+
+    # All expected signed fields must be present
+    expected_signed_fields = {
+        "certificate_id",
+        "chain_hash",
+        "governance_policy_hash",
+        "governance_policy_version",
+        "human_attested_at_utc",
+        "human_reviewed",
+        "human_reviewer_id_hash",
+        "issued_at_utc",
+        "key_id",
+        "model_name",
+        "model_version",
+        "nonce",
+        "note_hash",
+        "prompt_version",
+        "server_timestamp",
+        "tenant_id",
+    }
+    missing = expected_signed_fields - set(canonical_message.keys())
+    assert not missing, (
+        f"Canonical message is missing expected signed fields: {missing}"
+    )
+
+    # No unexpected extra fields (canonical message contract is fixed)
+    extra = set(canonical_message.keys()) - expected_signed_fields
+    assert not extra, (
+        f"Canonical message contains unexpected extra fields: {extra}. "
+        "Update docs/BUNDLE_SPEC.md and docs/CONTRACT_SNAPSHOT.md if intentional."
+    )

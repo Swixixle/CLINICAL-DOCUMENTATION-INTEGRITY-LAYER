@@ -136,9 +136,7 @@ The defense bundle is a ZIP archive downloaded via
 
 ### `canonical_message.json` Fields (All Included in Signature)
 
-All fields below are present in `canonical_message.json` and covered by the ECDSA signature.
-Source: `gateway/app/routes/clinical.py` (lines 302–317) and `gateway/app/services/signer.py` (`sign_generic_message`).
-See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for the complete signed-vs-not-signed spec.
+All fields below are covered by the ECDSA signature. See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for the complete authoritative breakdown of what is signed, indirectly protected, and not signed.
 
 - `certificate_id`
 - `chain_hash`
@@ -148,16 +146,18 @@ See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for the complete signed-vs-not-signe
 - `human_reviewed`
 - `human_reviewer_id_hash`
 - `issued_at_utc`
-- `key_id` (added by `sign_generic_message`)
+- `key_id`
 - `model_name`
 - `model_version`
-- `nonce` (added by `sign_generic_message`)
+- `nonce`
 - `note_hash`
 - `prompt_version`
-- `server_timestamp` (added by `sign_generic_message`)
+- `server_timestamp`
 - `tenant_id`
 
-**Not in canonical message:** `patient_hash` and `previous_hash` are stored in `certificate.json` but are **not** directly included in the signed canonical message. `previous_hash` is indirectly protected because `chain_hash` (which is signed) is computed from it. See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for details.
+> **`patient_hash`** is stored in `certificate.json` but is **not** in the canonical message and is therefore not directly signed.
+>
+> **`previous_hash`** is in `integrity_chain` but is **not** directly in the canonical message. It is indirectly protected: `previous_hash` is an input to the `chain_hash` computation, and `chain_hash` IS signed. Altering `previous_hash` would change `chain_hash`, breaking the signature.
 
 ### Offline Verification
 
