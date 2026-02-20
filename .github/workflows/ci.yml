@@ -89,9 +89,16 @@ jobs:
       run: |
         psql "$PG_URL" -c "SELECT current_user, current_database();"
 
+    - name: Alembic config sanity check
+      run: |
+        alembic -c alembic.ini heads
+      env:
+        DATABASE_URL: ${{ env.DATABASE_URL }}
+        PYTHONPATH: ${{ github.workspace }}
+
     - name: Apply Postgres schema via Alembic
       run: |
-        alembic upgrade head
+        alembic -c alembic.ini upgrade head
       env:
         PYTHONPATH: ${{ github.workspace }}
 

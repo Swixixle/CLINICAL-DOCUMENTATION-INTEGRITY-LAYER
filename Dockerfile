@@ -40,6 +40,8 @@ COPY --from=builder --chown=cdil:cdil /root/.local /home/cdil/.local
 
 # Copy application code
 COPY --chown=cdil:cdil gateway/ gateway/
+COPY --chown=cdil:cdil alembic/ alembic/
+COPY --chown=cdil:cdil alembic.ini .
 COPY --chown=cdil:cdil tools/ tools/
 COPY --chown=cdil:cdil requirements.txt .
 

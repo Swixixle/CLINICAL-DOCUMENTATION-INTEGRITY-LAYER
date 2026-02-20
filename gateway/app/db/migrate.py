@@ -113,6 +113,9 @@ def ensure_schema():
     from alembic import command as alembic_command
 
     alembic_cfg = Config(str(alembic_ini))
+    # Explicitly set script_location so programmatic usage cannot fail with
+    # "No 'script_location' key found" if the INI is absent or unreadable.
+    alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
     alembic_cfg.set_main_option("sqlalchemy.url", database_url)
 
     alembic_command.upgrade(alembic_cfg, "head")
