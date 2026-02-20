@@ -136,19 +136,28 @@ The defense bundle is a ZIP archive downloaded via
 
 ### `canonical_message.json` Fields (All Included in Signature)
 
-All fields below are covered by the ECDSA signature. See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for the complete list of what is signed vs. not signed.
+All fields below are covered by the ECDSA signature. See [`docs/BUNDLE_SPEC.md`](BUNDLE_SPEC.md) for the complete authoritative breakdown of what is signed, indirectly protected, and not signed.
 
 - `certificate_id`
 - `chain_hash`
 - `governance_policy_hash`
+- `governance_policy_version`
 - `human_attested_at_utc`
 - `human_reviewed`
 - `human_reviewer_id_hash`
 - `issued_at_utc`
+- `key_id`
+- `model_name`
 - `model_version`
+- `nonce`
 - `note_hash`
-- `patient_hash`
-- `previous_hash`
+- `prompt_version`
+- `server_timestamp`
+- `tenant_id`
+
+> **`patient_hash`** is stored in `certificate.json` but is **not** in the canonical message and is therefore not directly signed.
+>
+> **`previous_hash`** is in `integrity_chain` but is **not** directly in the canonical message. It is indirectly protected: `previous_hash` is an input to the `chain_hash` computation, and `chain_hash` IS signed. Altering `previous_hash` would change `chain_hash`, breaking the signature.
 
 ### Offline Verification
 

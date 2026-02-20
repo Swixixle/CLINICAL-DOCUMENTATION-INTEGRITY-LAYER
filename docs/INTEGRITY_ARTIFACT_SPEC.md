@@ -36,12 +36,19 @@ The **canonical message** is the exact byte sequence that gets cryptographically
 ```json
 {
   "certificate_id":"cert-019453c2-8f5a-7b2e-a123-456789abcdef",
-  "chain_hash":"sha256:abc123def456...",
-  "finalized_at":"2026-02-18T10:30:00Z",
+  "chain_hash":"abc123def456...",
+  "governance_policy_hash":"sha256:policy789...",
   "governance_policy_version":"CDOC-Policy-v1",
+  "human_attested_at_utc":"2026-02-18T10:30:00Z",
+  "human_reviewed":true,
+  "human_reviewer_id_hash":"sha256:reviewer456...",
+  "issued_at_utc":"2026-02-18T10:30:00Z",
+  "key_id":"tenant-key-001",
+  "model_name":"GPT-4-Turbo",
   "model_version":"gpt-4-turbo-2024-11",
   "nonce":"019453c2-8f5a-7b2e-a123-456789abcdef",
   "note_hash":"sha256:789012345678...",
+  "prompt_version":"clinical-v1.2",
   "server_timestamp":"2026-02-18T10:30:00Z",
   "tenant_id":"hospital-alpha"
 }
@@ -49,19 +56,30 @@ The **canonical message** is the exact byte sequence that gets cryptographically
 
 **Byte Representation**: After canonicalization, convert to UTF-8 bytes, then hash with SHA-256.
 
+> **`patient_hash`** is stored in `certificate.json` but is **not** included in the canonical message and is therefore not directly signed.
+>
+> **`previous_hash`** is in `integrity_chain` but is **not** directly in the canonical message. It is indirectly protected via `chain_hash`: `previous_hash` is an input to `chain_hash`, and `chain_hash` IS signed.
+
 ### Fields in Canonical Message
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `certificate_id` | string | Yes | UUIDv7 certificate identifier |
-| `tenant_id` | string | Yes | Tenant identifier (from JWT) |
-| `finalized_at` | string | Yes | ISO 8601 UTC timestamp |
-| `note_hash` | string | Yes | `sha256:<hex>` of clinical note |
+| `chain_hash` | string | Yes | Hash linking to previous certificate (indirectly protects `previous_hash`) |
+| `governance_policy_hash` | string | Yes | `sha256:<hex>` of governance policy version string |
+| `governance_policy_version` | string | Yes | Policy version label |
+| `human_attested_at_utc` | string \| null | Yes | ISO 8601 UTC timestamp of human attestation (null if not reviewed) |
+| `human_reviewed` | boolean | Yes | Whether a human reviewer attested to this note |
+| `human_reviewer_id_hash` | string \| null | Yes | `sha256:<hex>` of reviewer identifier (null if not reviewed) |
+| `issued_at_utc` | string | Yes | ISO 8601 UTC issuance timestamp |
+| `key_id` | string | Yes | Signing key identifier (added by signer) |
+| `model_name` | string | Yes | AI model name |
 | `model_version` | string | Yes | AI model version |
-| `governance_policy_version` | string | Yes | Policy version |
-| `chain_hash` | string | Yes | Hash linking to previous certificate |
-| `nonce` | string | Yes | UUIDv7 for replay protection |
-| `server_timestamp` | string | Yes | Server-controlled timestamp |
+| `nonce` | string | Yes | UUIDv7 for replay protection (added by signer) |
+| `note_hash` | string | Yes | `sha256:<hex>` of clinical note |
+| `prompt_version` | string \| null | Yes | Prompt template version label |
+| `server_timestamp` | string | Yes | Server-controlled timestamp (added by signer) |
+| `tenant_id` | string | Yes | Tenant identifier (from JWT) |
 
 **Security Constraints**:
 - ❌ **NEVER** include plaintext PHI (note_text, patient_reference, reviewer_id)
