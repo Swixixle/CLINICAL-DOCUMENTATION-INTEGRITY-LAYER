@@ -128,7 +128,6 @@ These fields are **not signed directly**, but tampering with them would break a 
 | `patient_hash` | Not included in `canonical_message.json`; see the note below |
 | Plaintext note content | Never stored or transmitted; only the hash is kept |
 | Raw patient identifiers | Never stored; only the caller-supplied hash is kept |
-| Tenant secrets or keys | Keys are referenced by ID only |
 | `verification_report.json` | Generated at bundle-download time; reflects state at that moment |
 | `public_key.pem` | The key is identified by `key_id` in the signed message |
 | `README.txt` | Bundle metadata only |
